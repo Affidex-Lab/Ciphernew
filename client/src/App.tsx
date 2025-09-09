@@ -9,17 +9,20 @@ export default function Home() {
   const [bundlerUrl, setBundlerUrl] = useState("");
   const [entryPoint, setEntryPoint] = useState("");
   const [factory, setFactory] = useState("");
+  const [policyId, setPolicyId] = useState("");
 
   useEffect(() => {
-    setBundlerUrl(localStorage.getItem("bundlerUrl") || "");
-    setEntryPoint(localStorage.getItem("entryPoint") || "");
+    setBundlerUrl(localStorage.getItem("bundlerUrl") || "https://api.pimlico.io/v2/421614/rpc?apikey=pim_kBDzXSD66Uh8PFLaiUhEHZ");
+    setEntryPoint(localStorage.getItem("entryPoint") || "0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108");
     setFactory(localStorage.getItem("factory") || "");
+    setPolicyId(localStorage.getItem("policyId") || "sp_certain_mathemanic");
   }, []);
 
   function saveConfig() {
     localStorage.setItem("bundlerUrl", bundlerUrl);
     localStorage.setItem("entryPoint", entryPoint);
     localStorage.setItem("factory", factory);
+    localStorage.setItem("policyId", policyId);
   }
 
   async function registerPasskey() {
@@ -76,6 +79,10 @@ export default function Home() {
               <div className="space-y-1">
                 <Label>Disposable Factory Address</Label>
                 <Input value={factory} onChange={(e) => setFactory(e.target.value)} placeholder="0x..." />
+              </div>
+              <div className="space-y-1">
+                <Label>Sponsorship Policy ID</Label>
+                <Input value={policyId} onChange={(e) => setPolicyId(e.target.value)} placeholder="sp_..." />
               </div>
               <Button className="w-full" onClick={saveConfig}>Save</Button>
             </CardContent>
