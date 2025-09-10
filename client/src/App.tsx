@@ -14,7 +14,7 @@ export default function Home() {
   useEffect(() => {
     setBundlerUrl(localStorage.getItem("bundlerUrl") || "https://api.pimlico.io/v2/421614/rpc?apikey=pim_kBDzXSD66Uh8PFLaiUhEHZ");
     setEntryPoint(localStorage.getItem("entryPoint") || "0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108");
-    setFactory(localStorage.getItem("factory") || "");
+    setFactory(localStorage.getItem("factory") || "0xCaC12D226EdE37Fd87BA0a223aaED24880a9AcE3");
     setPolicyId(localStorage.getItem("policyId") || "sp_certain_mathemanic");
   }, []);
 
