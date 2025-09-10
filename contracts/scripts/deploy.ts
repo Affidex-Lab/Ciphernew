@@ -11,7 +11,7 @@ async function main() {
   const factory = await Factory.deploy();
   await factory.waitForDeployment();
   const factoryAddr = await factory.getAddress();
-  console.log("DisposableAccountFactory:", factoryAddr);
+  console.log("DisposableAccountFactory (CREATE2):", factoryAddr);
 
   // Optional: sample ECDSA account for reference (not used for disposable flow)
   // const Account = await ethers.getContractFactory("CipherAccount");
