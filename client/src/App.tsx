@@ -16,10 +16,29 @@ export default function Home() {
   const [status, setStatus] = useState("");
 
   useEffect(() => {
-    setBundlerUrl(localStorage.getItem("bundlerUrl") || "https://api.pimlico.io/v2/421614/rpc?apikey=pim_kBDzXSD66Uh8PFLaiUhEHZ");
-    setEntryPoint(localStorage.getItem("entryPoint") || "0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108");
-    setFactory(localStorage.getItem("factory") || "0xfFa7a8DB30B46cEb36685b01D766fabE298080c1");
-    setPolicyId(localStorage.getItem("policyId") || "sp_certain_mathemanic");
+    (async () => {
+      try {
+        const envBundler = (import.meta as any).env?.VITE_BUNDLER_URL || "";
+        const envEntry = (import.meta as any).env?.VITE_ENTRYPOINT || "";
+        const envFactory = (import.meta as any).env?.VITE_FACTORY || "";
+        const envPolicy = (import.meta as any).env?.VITE_SPONSORSHIP_POLICY_ID || "";
+
+        let serverCfg: any = {};
+        try {
+          const res = await fetch("/config.json", { cache: "no-store" });
+          if (res.ok) serverCfg = await res.json();
+        } catch {}
+
+        const ls = (k: string) => localStorage.getItem(k) || "";
+
+        setBundlerUrl(ls("bundlerUrl") || serverCfg.bundlerUrl || envBundler);
+        setEntryPoint(ls("entryPoint") || serverCfg.entryPoint || envEntry);
+        setFactory(ls("factory") || serverCfg.factory || envFactory);
+        setPolicyId(ls("policyId") || serverCfg.policyId || envPolicy);
+      } catch {
+        // leave empty; user can fill via UI
+      }
+    })();
   }, []);
 
   function saveConfig() {
@@ -27,6 +46,14 @@ export default function Home() {
     localStorage.setItem("entryPoint", entryPoint);
     localStorage.setItem("factory", factory);
     localStorage.setItem("policyId", policyId);
+  }
+
+  function resetToServerConfig() {
+    localStorage.removeItem("bundlerUrl");
+    localStorage.removeItem("entryPoint");
+    localStorage.removeItem("factory");
+    localStorage.removeItem("policyId");
+    location.reload();
   }
 
   async function registerPasskey() {
@@ -145,7 +172,10 @@ export default function Home() {
                 <Label>Sponsorship Policy ID</Label>
                 <Input value={policyId} onChange={(e) => setPolicyId(e.target.value)} placeholder="sp_..." />
               </div>
-              <Button className="w-full" onClick={saveConfig}>Save</Button>
+              <div className="flex gap-2">
+                <Button className="flex-1" onClick={saveConfig}>Save</Button>
+                <Button variant="outline" className="flex-1" onClick={resetToServerConfig}>Reset</Button>
+              </div>
             </CardContent>
           </Card>
 

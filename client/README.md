@@ -1,135 +1,45 @@
-# Scout Vite Template
+# Cipher Wallet Client (Universal Deploy)
 
-This is a [Vite](https://vite.dev) project bootstrapped with React + TypeScript and configured with TailwindCSS v4 and ShadCN UI.
+This is a static SPA built with Vite + React. It can be deployed to any static host (Netlify, Vercel, Cloudflare Pages, GitHub Pages, S3/CloudFront, Nginx, etc.).
 
-## Getting Started
+Build
+- Node 18+ (20 recommended)
+- Install: `npm install`
+- Build: `npm run build`
+- Output: `dist/`
 
-First, run the development server:
+Runtime configuration (no code changes)
+Pick one of the following methods to configure the app per environment:
 
-```bash
-bun dev
+1) Environment variables at build time (Vite)
+- Create `.env` and set:
+```
+VITE_BUNDLER_URL=<json-rpc>
+VITE_ENTRYPOINT=0x...
+VITE_FACTORY=0x...
+VITE_SPONSORSHIP_POLICY_ID=sp_...
+```
+- `npm run build`
+
+2) Static config file (runtime)
+- Copy `public/config.example.json` to `public/config.json` and fill values. The app fetches `/config.json` at startup.
+- You can upload/replace `config.json` without rebuilding.
+
+3) In-app overrides (no file/env)
+- Open the site and paste values in the Configure panel, then click Save. They persist in localStorage.
+- Click Reset to restore server config.
+
+Single Page App routing
+- This app is an SPA; route fallbacks must serve `/index.html`.
+- Netlify: provided `netlify.toml` with SPA redirect.
+- Vercel: add `vercel.json` rewrites (`/*` → `/index.html`).
+- Cloudflare Pages: SPA fallback is automatic or configure 404→index.
+- GitHub Pages: set 404.html to serve index (or use `spa-github-pages`).
+- Nginx:
+```
+location / { try_files $uri /index.html; }
 ```
 
-Open [http://localhost:5173](http://localhost:5173) with your browser to see the result.
+Security
+- Never commit secrets. Use `.env.example` and runtime `config.json` without secrets. Pimlico API key is public-scoped; restrict usage in your dashboard.
 
-You can start editing the page by modifying `src/App.tsx`. The page auto-updates as you edit the file.
-
-## Project Configuration
-
-### Package Management
-
-This project uses [Bun](https://bun.sh/) as the package manager:
-
-- Install dependencies: `bun add <package-name>`
-- Run scripts: `bun <script-name>`
-- Manage dev dependencies: `bun add -d <package-name>`
-
-### Theme Customization
-
-The project uses Tailwind CSS V4 with a theme defined in:
-
-- `src/index.css` - For CSS variables including colors in OKLCH format and custom theming
-- Tailwind V4 uses the new `@theme` directive for configuration
-
-### ShadCN UI Components
-
-This project uses [ShadCN UI](https://ui.shadcn.com) for styled components. The components are incorporated directly into the codebase (not as dependencies), making them fully customizable. All components have been installed:
-
-- accordion
-- alert-dialog
-- alert
-- aspect-ratio
-- avatar
-- badge
-- breadcrumb
-- button
-- calendar
-- card
-- carousel
-- chart
-- checkbox
-- collapsible
-- command
-- context-menu
-- dialog
-- drawer
-- dropdown-menu
-- form
-- hover-card
-- input-otp
-- input
-- label
-- menubar
-- navigation-menu
-- pagination
-- popover
-- progress
-- radio-group
-- scroll-area
-- select
-- separator
-- sheet
-- skeleton
-- slider
-- sonner
-- switch
-- table
-- tabs
-- textarea
-- toast
-- toggle-group
-- toggle
-
-### Icon Library
-
-[Lucide React](https://lucide.dev/) is the preferred icon library for this project, as specified in components.json. Always use Lucide icons to maintain consistency:
-
-```tsx
-import { ArrowRight } from "lucide-react";
-
-// Use in components
-<Button>
-  <span>Click me</span>
-  <ArrowRight />
-</Button>;
-```
-
-### Font Configuration
-
-This project uses Google Fonts with:
-
-- Inter (sans-serif)
-- Playfair Display (serif)
-
-The font is imported via Google Fonts CDN in `src/index.css` and configured in the Tailwind theme:
-
-```css
-@import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap");
-
-@theme inline {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Playfair Display", ui-serif, Georgia, serif;
-}
-```
-
-To change or update fonts:
-
-1. Update the Google Fonts import in `src/index.css`
-2. Modify the `--font-sans` variable in the `@theme` directive
-
-## Build and Deploy
-
-Build the project:
-
-```bash
-bun run build
-```
-
-Preview the production build:
-
-```bash
-bun run preview
-```
-
-The built files will be in the `dist` directory, ready for deployment to any static hosting service.
