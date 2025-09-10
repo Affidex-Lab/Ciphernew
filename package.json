@@ -1,0 +1,9 @@
+{
+  "name": "cipher-root",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build:client": "npm --prefix client install --no-audit --no-fund && npm --prefix client run build",
+    "build": "npm run build:client"
+  }
+}
