@@ -20,7 +20,15 @@ const FACTORY_ABI = [
 ];
 
 const ACCOUNT_ABI = [
-  "function executeAndBurn(address to, uint256 value, bytes data)"
+  "function execute(address to, uint256 value, bytes data)",
+  "function executeAndBurn(address to, uint256 value, bytes data)",
+  "function configureGuardiansBySelf(address[] addrs, uint256 threshold, uint256 delaySeconds)",
+  "function setFrozenBySelf(bool v)",
+  "function executeRecovery(bytes32 id)",
+  "function proposeRecoveryBySelf(address newOwner)",
+  "function recoveryStart(bytes32) view returns (uint256)",
+  "function recoveryConfirms(bytes32) view returns (uint256)",
+  "function recoveryNewOwner(bytes32) view returns (address)"
 ];
 
 const EP_ABI = [
@@ -74,6 +82,47 @@ export async function predictAccountAddress(rpc: string, factory: string, entryP
 export function encodeExecuteAndBurn(to: string, value: bigint, data: string) {
   const iface = new ethers.Interface(ACCOUNT_ABI);
   return iface.encodeFunctionData("executeAndBurn", [to, value, data]);
+}
+
+export function encodeSelf(account: string, data: string) {
+  const iface = new ethers.Interface(ACCOUNT_ABI);
+  return iface.encodeFunctionData("execute", [account, 0n, data]);
+}
+
+export function dataConfigureGuardiansBySelf(addrs: string[], threshold: number, delaySeconds: number) {
+  const iface = new ethers.Interface(ACCOUNT_ABI);
+  return iface.encodeFunctionData("configureGuardiansBySelf", [addrs, threshold, delaySeconds]);
+}
+
+export function dataSetFrozenBySelf(v: boolean) {
+  const iface = new ethers.Interface(ACCOUNT_ABI);
+  return iface.encodeFunctionData("setFrozenBySelf", [v]);
+}
+
+export function dataExecuteRecovery(id: string) {
+  const iface = new ethers.Interface(ACCOUNT_ABI);
+  return iface.encodeFunctionData("executeRecovery", [id]);
+}
+
+export function dataProposeRecoveryBySelf(newOwner: string) {
+  const iface = new ethers.Interface(ACCOUNT_ABI);
+  return iface.encodeFunctionData("proposeRecoveryBySelf", [newOwner]);
+}
+
+export function recoveryId(account: string, chainId: bigint, newOwner: string) {
+  return ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["address","uint256","address"],[account, chainId, newOwner]));
+}
+
+export async function readRecovery(providerUrl: string, account: string, id: string) {
+  const provider = new ethers.JsonRpcProvider(providerUrl);
+  const iface = new ethers.Interface(ACCOUNT_ABI);
+  const rs = await provider.call({ to: account, data: iface.encodeFunctionData("recoveryStart", [id]) });
+  const rc = await provider.call({ to: account, data: iface.encodeFunctionData("recoveryConfirms", [id]) });
+  const rn = await provider.call({ to: account, data: iface.encodeFunctionData("recoveryNewOwner", [id]) });
+  const [start] = iface.decodeFunctionResult("recoveryStart", rs) as [bigint];
+  const [confirms] = iface.decodeFunctionResult("recoveryConfirms", rc) as [bigint];
+  const [newOwner] = iface.decodeFunctionResult("recoveryNewOwner", rn) as [string];
+  return { start, confirms, newOwner };
 }
 
 export async function getUserOpHash(rpc: string, entryPoint: string, userOp: UserOperation) {

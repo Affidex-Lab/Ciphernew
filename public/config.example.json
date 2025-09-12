@@ -1,6 +1,7 @@
 {
   "bundlerUrl": "",
   "entryPoint": "",
-  "factory": "",
+  "disposableFactory": "",
+  "accountFactory": "",
   "policyId": ""
 }

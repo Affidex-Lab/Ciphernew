@@ -7,13 +7,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { Settings, Sparkles, WalletMinimal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ethers } from "ethers";
-import { encodeExecuteAndBurn, estimateUserOp, getGasPrice, getUserOpHash, packInitCode, predictAccountAddress, sponsorUserOp, sendUserOp, UserOperation, getUserOpReceipt } from "./lib/aa";
+import { encodeExecuteAndBurn, estimateUserOp, getGasPrice, getUserOpHash, packInitCode, predictAccountAddress, sponsorUserOp, sendUserOp, UserOperation, getUserOpReceipt, encodeSelf, dataConfigureGuardiansBySelf, dataSetFrozenBySelf, dataProposeRecoveryBySelf, dataExecuteRecovery, recoveryId, readRecovery } from "./lib/aa";
 
 export default function Home() {
   const [bundlerUrl, setBundlerUrl] = useState("");
   const [entryPoint, setEntryPoint] = useState("");
   const [factory, setFactory] = useState("");
   const [policyId, setPolicyId] = useState("");
+  const [accFactory, setAccFactory] = useState("");
 
   const [openTransfer, setOpenTransfer] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
@@ -21,6 +22,17 @@ export default function Home() {
   const [amount, setAmount] = useState("0");
   const [status, setStatus] = useState("");
   const [txHash, setTxHash] = useState<string | null>(null);
+
+  // Seedless account state
+  const [ownerPk, setOwnerPk] = useState<string | null>(null);
+  const [ownerAddr, setOwnerAddr] = useState<string | null>(null);
+  const [accSalt, setAccSalt] = useState<string | null>(null);
+  const [accountAddr, setAccountAddr] = useState<string | null>(null);
+  const [g1, setG1] = useState("");
+  const [g2, setG2] = useState("");
+  const [g3, setG3] = useState("");
+  const [newOwner, setNewOwner] = useState("");
+  const [recInfo, setRecInfo] = useState<{start?: bigint, confirms?: bigint, newOwner?: string} | null>(null);
 
   const rpc = useMemo(() => bundlerUrl ? bundlerUrl.split("?")[0] : "", [bundlerUrl]);
 
@@ -30,6 +42,7 @@ export default function Home() {
         const envBundler = (import.meta as any).env?.VITE_BUNDLER_URL || "";
         const envEntry = (import.meta as any).env?.VITE_ENTRYPOINT || "";
         const envFactory = (import.meta as any).env?.VITE_FACTORY || "";
+        const envAccFactory = (import.meta as any).env?.VITE_ACCOUNT_FACTORY || "";
         const envPolicy = (import.meta as any).env?.VITE_SPONSORSHIP_POLICY_ID || "";
 
         let serverCfg: any = {};
@@ -42,7 +55,8 @@ export default function Home() {
 
         setBundlerUrl(ls("bundlerUrl") || serverCfg.bundlerUrl || envBundler);
         setEntryPoint(ls("entryPoint") || serverCfg.entryPoint || envEntry);
-        setFactory(ls("factory") || serverCfg.factory || envFactory);
+        setFactory(ls("factory") || serverCfg.disposableFactory || serverCfg.factory || envFactory);
+        setAccFactory(ls("accFactory") || serverCfg.accountFactory || envAccFactory);
         setPolicyId(ls("policyId") || serverCfg.policyId || envPolicy);
       } catch {}
     })();
@@ -53,6 +67,7 @@ export default function Home() {
     localStorage.setItem("entryPoint", entryPoint);
     localStorage.setItem("factory", factory);
     localStorage.setItem("policyId", policyId);
+    localStorage.setItem("accFactory", accFactory);
   }
 
   function resetToServerConfig() {
@@ -61,6 +76,143 @@ export default function Home() {
     localStorage.removeItem("factory");
     localStorage.removeItem("policyId");
     location.reload();
+  }
+
+  function ensureOwner() {
+    if (ownerPk && ownerAddr && accSalt) return new ethers.Wallet(ownerPk);
+    const w = ethers.Wallet.createRandom();
+    setOwnerPk(w.privateKey);
+    setOwnerAddr(w.address);
+    const s = ethers.zeroPadValue(ethers.toBeHex(ethers.randomBytes(32)), 32);
+    setAccSalt(s);
+    return w;
+  }
+
+  async function deployAccount() {
+    try {
+      const w = ensureOwner();
+      const salt = accSalt!;
+      const predicted = await predictAccountAddress(rpc, accFactory, entryPoint, w.address, salt);
+      setAccountAddr(predicted);
+
+      let userOp: UserOperation = {
+        sender: predicted,
+        nonce: 0n,
+        initCode: packInitCode(accFactory, entryPoint, w.address, salt),
+        callData: "0x",
+        callGasLimit: 0n,
+        verificationGasLimit: 0n,
+        preVerificationGas: 0n,
+        maxFeePerGas: 0n,
+        maxPriorityFeePerGas: 0n,
+        paymasterAndData: "0x",
+        signature: "0x",
+      };
+      const est = await estimateUserOp(bundlerUrl, userOp, entryPoint);
+      const gasPrice = await getGasPrice(bundlerUrl);
+      userOp = { ...userOp, callGasLimit: BigInt(est.callGasLimit)+20000n, verificationGasLimit: BigInt(est.verificationGasLimit)+20000n, preVerificationGas: BigInt(est.preVerificationGas)+20000n, maxFeePerGas: gasPrice.maxFeePerGas, maxPriorityFeePerGas: gasPrice.maxPriorityFeePerGas };
+      const spon = await sponsorUserOp(bundlerUrl, userOp, entryPoint, policyId);
+      userOp.paymasterAndData = spon.paymasterAndData;
+      const uoh = await getUserOpHash(rpc, entryPoint, userOp);
+      const sig = await w.signMessage(ethers.getBytes(uoh));
+      userOp.signature = sig;
+      setStatus((s)=> s + `\nDeploying account ${predicted}...`);
+      const uoHash = await sendUserOp(bundlerUrl, userOp, entryPoint);
+      setStatus((s)=> s + `\nDeploy submitted: ${uoHash}`);
+    } catch(e:any){ setStatus(`Error: ${e?.message||e}`); }
+  }
+
+  async function setGuardians() {
+    try {
+      if (!accountAddr) throw new Error("Deploy or predict account first");
+      const w = ensureOwner();
+      const data = dataConfigureGuardiansBySelf([g1,g2,g3].filter(Boolean), 2, 48*3600);
+      let userOp: UserOperation = {
+        sender: accountAddr,
+        nonce: 0n,
+        initCode: "0x",
+        callData: encodeSelf(accountAddr, data),
+        callGasLimit: 0n, verificationGasLimit: 0n, preVerificationGas: 0n,
+        maxFeePerGas: 0n, maxPriorityFeePerGas: 0n, paymasterAndData: "0x", signature: "0x"
+      };
+      const est = await estimateUserOp(bundlerUrl, userOp, entryPoint);
+      const gasPrice = await getGasPrice(bundlerUrl);
+      userOp = { ...userOp, callGasLimit: BigInt(est.callGasLimit)+20000n, verificationGasLimit: BigInt(est.verificationGasLimit)+20000n, preVerificationGas: BigInt(est.preVerificationGas)+20000n, maxFeePerGas: gasPrice.maxFeePerGas, maxPriorityFeePerGas: gasPrice.maxPriorityFeePerGas };
+      const spon = await sponsorUserOp(bundlerUrl, userOp, entryPoint, policyId);
+      userOp.paymasterAndData = spon.paymasterAndData;
+      const uoh = await getUserOpHash(rpc, entryPoint, userOp);
+      const sig = await w.signMessage(ethers.getBytes(uoh));
+      userOp.signature = sig;
+      const uoHash = await sendUserOp(bundlerUrl, userOp, entryPoint);
+      setStatus((s)=> s + `\nGuardians configured: ${uoHash}`);
+    } catch(e:any){ setStatus(`Error: ${e?.message||e}`); }
+  }
+
+  async function toggleFreeze(v: boolean){
+    try {
+      if (!accountAddr) throw new Error("Deploy or predict account first");
+      const w = ensureOwner();
+      const data = dataSetFrozenBySelf(v);
+      let userOp: UserOperation = { sender: accountAddr, nonce: 0n, initCode: "0x", callData: encodeSelf(accountAddr, data), callGasLimit: 0n, verificationGasLimit: 0n, preVerificationGas: 0n, maxFeePerGas: 0n, maxPriorityFeePerGas: 0n, paymasterAndData: "0x", signature: "0x" };
+      const est = await estimateUserOp(bundlerUrl, userOp, entryPoint);
+      const gasPrice = await getGasPrice(bundlerUrl);
+      userOp = { ...userOp, callGasLimit: BigInt(est.callGasLimit)+20000n, verificationGasLimit: BigInt(est.verificationGasLimit)+20000n, preVerificationGas: BigInt(est.preVerificationGas)+20000n, maxFeePerGas: gasPrice.maxFeePerGas, maxPriorityFeePerGas: gasPrice.maxPriorityFeePerGas };
+      const spon = await sponsorUserOp(bundlerUrl, userOp, entryPoint, policyId);
+      userOp.paymasterAndData = spon.paymasterAndData;
+      const uoh = await getUserOpHash(rpc, entryPoint, userOp);
+      const sig = await w.signMessage(ethers.getBytes(uoh));
+      userOp.signature = sig;
+      const uoHash = await sendUserOp(bundlerUrl, userOp, entryPoint);
+      setStatus((s)=> s + `\nFreeze ${v?'on':'off'}: ${uoHash}`);
+    } catch(e:any){ setStatus(`Error: ${e?.message||e}`); }
+  }
+
+  async function ownerProposeRecovery(){
+    try{
+      if (!accountAddr || !newOwner) throw new Error("Account/newOwner required");
+      const w = ensureOwner();
+      const data = dataProposeRecoveryBySelf(newOwner);
+      let userOp: UserOperation = { sender: accountAddr, nonce: 0n, initCode: "0x", callData: encodeSelf(accountAddr, data), callGasLimit: 0n, verificationGasLimit: 0n, preVerificationGas: 0n, maxFeePerGas: 0n, maxPriorityFeePerGas: 0n, paymasterAndData: "0x", signature: "0x" };
+      const est = await estimateUserOp(bundlerUrl, userOp, entryPoint);
+      const gasPrice = await getGasPrice(bundlerUrl);
+      userOp = { ...userOp, callGasLimit: BigInt(est.callGasLimit)+20000n, verificationGasLimit: BigInt(est.verificationGasLimit)+20000n, preVerificationGas: BigInt(est.preVerificationGas)+20000n, maxFeePerGas: gasPrice.maxFeePerGas, maxPriorityFeePerGas: gasPrice.maxPriorityFeePerGas };
+      const spon = await sponsorUserOp(bundlerUrl, userOp, entryPoint, policyId);
+      userOp.paymasterAndData = spon.paymasterAndData;
+      const uoh = await getUserOpHash(rpc, entryPoint, userOp);
+      const sig = await w.signMessage(ethers.getBytes(uoh));
+      userOp.signature = sig;
+      const uoHash = await sendUserOp(bundlerUrl, userOp, entryPoint);
+      setStatus((s)=> s + `\nOwner proposed recovery: ${uoHash}`);
+    }catch(e:any){ setStatus(`Error: ${e?.message||e}`); }
+  }
+
+  async function executeRecoveryNow(){
+    try{
+      if (!accountAddr || !newOwner) throw new Error("Account/newOwner required");
+      const w = ensureOwner();
+      const id = recoveryId(accountAddr, BigInt(421614), newOwner);
+      const data = dataExecuteRecovery(id);
+      let userOp: UserOperation = { sender: accountAddr, nonce: 0n, initCode: "0x", callData: encodeSelf(accountAddr, data), callGasLimit: 0n, verificationGasLimit: 0n, preVerificationGas: 0n, maxFeePerGas: 0n, maxPriorityFeePerGas: 0n, paymasterAndData: "0x", signature: "0x" };
+      const est = await estimateUserOp(bundlerUrl, userOp, entryPoint);
+      const gasPrice = await getGasPrice(bundlerUrl);
+      userOp = { ...userOp, callGasLimit: BigInt(est.callGasLimit)+20000n, verificationGasLimit: BigInt(est.verificationGasLimit)+20000n, preVerificationGas: BigInt(est.preVerificationGas)+20000n, maxFeePerGas: gasPrice.maxFeePerGas, maxPriorityFeePerGas: gasPrice.maxPriorityFeePerGas };
+      const spon = await sponsorUserOp(bundlerUrl, userOp, entryPoint, policyId);
+      userOp.paymasterAndData = spon.paymasterAndData;
+      const uoh = await getUserOpHash(rpc, entryPoint, userOp);
+      const sig = await w.signMessage(ethers.getBytes(uoh));
+      userOp.signature = sig;
+      const uoHash = await sendUserOp(bundlerUrl, userOp, entryPoint);
+      setStatus((s)=> s + `\nExecute recovery submitted: ${uoHash}`);
+    }catch(e:any){ setStatus(`Error: ${e?.message||e}`); }
+  }
+
+  async function checkRecovery(){
+    try{
+      if (!accountAddr || !newOwner) throw new Error("Account/newOwner required");
+      const id = recoveryId(accountAddr, BigInt(421614), newOwner);
+      const info = await readRecovery(rpc, accountAddr, id);
+      setRecInfo(info);
+    }catch(e:any){ setStatus(`Error: ${e?.message||e}`); }
   }
 
   async function sendDisposableTx() {
@@ -163,6 +315,10 @@ export default function Home() {
                 <Input value={factory} onChange={(e) => setFactory(e.target.value)} placeholder="0x..." />
               </div>
               <div className="space-y-1">
+                <Label>Account Factory Address</Label>
+                <Input value={accFactory} onChange={(e) => setAccFactory(e.target.value)} placeholder="0x..." />
+              </div>
+              <div className="space-y-1">
                 <Label>Sponsorship Policy ID</Label>
                 <Input value={policyId} onChange={(e) => setPolicyId(e.target.value)} placeholder="sp_..." />
               </div>
@@ -176,7 +332,7 @@ export default function Home() {
       </header>
 
       <main className="mx-auto flex w-full max-w-6xl flex-col items-center gap-10 px-4 pb-20">
-        <div className="relative mt-6 rounded-2xl border border-border/50 bg-gradient-to-br from-secondary/60 to-background p-10 text-center">
+        <div className="relative mt-6 rounded-2xl border border-border/50 bg-gradient-to-br from-[#0b1220] to-background p-10 text-center shadow-[0_0_80px_-30px_#1EA7FD]">
           <div className="mx-auto max-w-3xl space-y-4">
             <div className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-black/30 px-3 py-1 text-xs text-primary">
               <Sparkles size={12} />
@@ -195,17 +351,59 @@ export default function Home() {
           </div>
         </div>
 
-        {status && (
-          <Card className="w-full max-w-3xl text-left">
-            <CardHeader><CardTitle>Status</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
-              <pre className="whitespace-pre-wrap text-xs text-muted-foreground">{status}</pre>
-              {txHash && (
-                <a className="text-primary underline" href={`https://sepolia.arbiscan.io/tx/${txHash}`} target="_blank" rel="noreferrer">View on Arbiscan ↗</a>
-              )}
-            </CardContent>
-          </Card>
-        )}
+        <Card className="w-full max-w-6xl text-left">
+          <CardHeader><CardTitle>Status</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            <pre className="whitespace-pre-wrap text-xs text-muted-foreground">{status || 'Ready.'}</pre>
+            {txHash && (
+              <a className="text-primary underline" href={`https://sepolia.arbiscan.io/tx/${txHash}`} target="_blank" rel="noreferrer">View on Arbiscan ↗</a>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="w-full max-w-6xl text-left">
+          <CardHeader><CardTitle>Seedless Smart Wallet (Owner + Guardians)</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={()=>{ const w=ensureOwner(); setOwnerPk(w.privateKey); setOwnerAddr(w.address); }}>Generate Owner Key</Button>
+              <Button variant="outline" onClick={deployAccount}>Deploy Account</Button>
+              <Button variant="outline" onClick={()=>toggleFreeze(true)}>Freeze</Button>
+              <Button variant="outline" onClick={()=>toggleFreeze(false)}>Unfreeze</Button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label>Owner Address</Label>
+                <Input readOnly value={ownerAddr || ''} placeholder="Click 'Generate Owner Key'" />
+              </div>
+              <div>
+                <Label>Predicted Account</Label>
+                <Input readOnly value={accountAddr || ''} placeholder="Click 'Deploy Account'" />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div><Label>Guardian 1</Label><Input value={g1} onChange={(e)=>setG1(e.target.value)} placeholder="0x..."/></div>
+              <div><Label>Guardian 2</Label><Input value={g2} onChange={(e)=>setG2(e.target.value)} placeholder="0x..."/></div>
+              <div><Label>Guardian 3</Label><Input value={g3} onChange={(e)=>setG3(e.target.value)} placeholder="0x..."/></div>
+            </div>
+            <Button onClick={setGuardians}>Set Guardians (2-of-3, 48h)</Button>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label>New Owner (for recovery)</Label>
+                <Input value={newOwner} onChange={(e)=>setNewOwner(e.target.value)} placeholder="0x..."/>
+              </div>
+              <div className="flex items-end gap-2">
+                <Button onClick={ownerProposeRecovery}>Owner proposes</Button>
+                <Button variant="outline" onClick={checkRecovery}>Check status</Button>
+                <Button variant="outline" onClick={executeRecoveryNow}>Execute</Button>
+              </div>
+            </div>
+            {recInfo && (
+              <p className="text-xs text-muted-foreground">Confirms: {String(recInfo.confirms)} · New owner: {recInfo.newOwner}</p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Guardians must each call <code>proposeRecovery(newOwner)</code> on the account contract to approve. After 48h and 2 approvals, click Execute.
+            </p>
+          </CardContent>
+        </Card>
       </main>
 
       <Dialog open={openTransfer} onOpenChange={setOpenTransfer}>
