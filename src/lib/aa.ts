@@ -92,3 +92,11 @@ export async function sendUserOp(bundlerUrl: string, userOp: UserOperation, entr
   if (json.error) throw new Error(json.error.message || "send error");
   return json.result as string; // userOpHash
 }
+
+export async function getUserOpReceipt(bundlerUrl: string, userOpHash: string) {
+  const body = { jsonrpc: "2.0", id: 1, method: "eth_getUserOperationReceipt", params: [ userOpHash ] };
+  const res = await fetch(bundlerUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const json = await res.json();
+  if (json.error) return null;
+  return json.result as { receipt?: { transactionHash: string } } | null;
+}
