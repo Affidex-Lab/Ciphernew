@@ -35,7 +35,7 @@ export default function Home() {
   const [recInfo, setRecInfo] = useState<{start?: bigint, confirms?: bigint, newOwner?: string} | null>(null);
   const [chainId, setChainId] = useState<bigint | null>(null);
 
-  const rpc = useMemo(() => bundlerUrl ? bundlerUrl.split("?")[0] : "", [bundlerUrl]);
+  const rpc = useMemo(() => bundlerUrl || "", [bundlerUrl]);
 
   // Guardian approve via link
   const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : "");

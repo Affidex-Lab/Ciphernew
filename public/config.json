@@ -1,0 +1,7 @@
+{
+  "bundlerUrl": "https://api.pimlico.io/v2/421614/rpc?apikey=pim_kBDzXSD66Uh8PFLaiUhEHZ",
+  "entryPoint": "0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108",
+  "disposableFactory": "0xfFa7a8DB30B46cEb36685b01D766fabE298080c1",
+  "accountFactory": "",
+  "policyId": "sp_certain_mathemanic"
+}
