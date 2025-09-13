@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { Settings, Sparkles, WalletMinimal, Link2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ethers, BrowserProvider } from "ethers";
-import { encodeExecuteAndBurn, estimateUserOp, getGasPrice, getUserOpHash, packInitCode, predictAccountAddress, sponsorUserOp, sendUserOp, UserOperation, getUserOpReceipt, encodeSelf, dataConfigureGuardiansBySelf, dataSetFrozenBySelf, dataProposeRecoveryBySelf, dataExecuteRecovery, recoveryId, readRecovery } from "./lib/aa";
+import { encodeExecuteAndBurn, estimateUserOp, getGasPrice, getUserOpHash, packInitCode, predictAccountAddress, sponsorUserOp, sendUserOp, UserOperation, getUserOpReceipt, encodeSelf, dataConfigureGuardiansBySelf, dataSetFrozenBySelf, dataProposeRecoveryBySelf, dataExecuteRecovery, recoveryId, readRecovery, getChainId } from "./lib/aa";
 
 export default function Home() {
   const [bundlerUrl, setBundlerUrl] = useState("");
@@ -33,6 +33,7 @@ export default function Home() {
   const [g3, setG3] = useState("");
   const [newOwner, setNewOwner] = useState("");
   const [recInfo, setRecInfo] = useState<{start?: bigint, confirms?: bigint, newOwner?: string} | null>(null);
+  const [chainId, setChainId] = useState<bigint | null>(null);
 
   const rpc = useMemo(() => bundlerUrl ? bundlerUrl.split("?")[0] : "", [bundlerUrl]);
 
@@ -67,6 +68,16 @@ export default function Home() {
       } catch {}
     })();
   }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!rpc) return;
+        const cid = await getChainId(rpc);
+        setChainId(cid);
+      } catch {}
+    })();
+  }, [rpc]);
 
   function saveConfig() {
     localStorage.setItem("bundlerUrl", bundlerUrl);
@@ -196,7 +207,8 @@ export default function Home() {
     try{
       if (!accountAddr || !newOwner) throw new Error("Account/newOwner required");
       const w = ensureOwner();
-      const id = recoveryId(accountAddr, BigInt(421614), newOwner);
+      const cid = chainId ?? await getChainId(rpc);
+      const id = recoveryId(accountAddr, cid, newOwner);
       const data = dataExecuteRecovery(id);
       let userOp: UserOperation = { sender: accountAddr, nonce: 0n, initCode: "0x", callData: encodeSelf(accountAddr, data), callGasLimit: 0n, verificationGasLimit: 0n, preVerificationGas: 0n, maxFeePerGas: 0n, maxPriorityFeePerGas: 0n, paymasterAndData: "0x", signature: "0x" };
       const est = await estimateUserOp(bundlerUrl, userOp, entryPoint);
@@ -215,7 +227,8 @@ export default function Home() {
   async function checkRecovery(){
     try{
       if (!accountAddr || !newOwner) throw new Error("Account/newOwner required");
-      const id = recoveryId(accountAddr, BigInt(421614), newOwner);
+      const cid = chainId ?? await getChainId(rpc);
+      const id = recoveryId(accountAddr, cid, newOwner);
       const info = await readRecovery(rpc, accountAddr, id);
       setRecInfo(info);
     }catch(e:any){ setStatus(`Error: ${e?.message||e}`); }
@@ -369,7 +382,7 @@ export default function Home() {
               Your funds, not your phrases. Automatic temp wallets and rotating keys.
             </p>
             <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Button size="lg">Create Seedless Wallet</Button>
+              <Button size="lg" onClick={() => { ensureOwner(); deployAccount(); }}>Create Seedless Wallet</Button>
               <Button variant="outline" size="lg" onClick={() => { setOpenTransfer(true); setStep(1); }}>One‑time Private Transfer</Button>
             </div>
           </div>
