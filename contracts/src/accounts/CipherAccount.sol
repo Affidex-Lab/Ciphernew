@@ -40,6 +40,11 @@ contract CipherAccount is IERC1271 {
         _;
     }
 
+    modifier onlySelf() {
+        require(msg.sender == address(this), "not self");
+        _;
+    }
+
     constructor(address _entryPoint, address _owner) {
         entryPoint = _entryPoint;
         owner = _owner;
@@ -68,6 +73,7 @@ contract CipherAccount is IERC1271 {
     }
 
     function setFrozen(bool v) external onlyOwner { frozen = v; emit Frozen(v); }
+    function setFrozenBySelf(bool v) external onlySelf { frozen = v; emit Frozen(v); }
 
     function guardianFreeze() external {
         require(guardians[msg.sender], "not guardian");
@@ -78,6 +84,14 @@ contract CipherAccount is IERC1271 {
     function setSessionKey(address k, bool v) external onlyOwner { sessionKeys[k] = v; }
 
     function configureGuardians(address[] calldata addrs, uint256 threshold, uint256 delaySeconds) external onlyOwner {
+        _configureGuardians(addrs, threshold, delaySeconds);
+    }
+
+    function configureGuardiansBySelf(address[] calldata addrs, uint256 threshold, uint256 delaySeconds) external onlySelf {
+        _configureGuardians(addrs, threshold, delaySeconds);
+    }
+
+    function _configureGuardians(address[] calldata addrs, uint256 threshold, uint256 delaySeconds) internal {
         for (uint256 i = 0; i < addrs.length; i++) {
             if (!guardians[addrs[i]]) {
                 guardians[addrs[i]] = true;
@@ -92,6 +106,14 @@ contract CipherAccount is IERC1271 {
 
     function proposeRecovery(address newOwner) external returns (bytes32 id) {
         require(guardians[msg.sender] || msg.sender == owner, "not allowed");
+        id = _proposeRecovery(newOwner);
+    }
+
+    function proposeRecoveryBySelf(address newOwner) external onlySelf returns (bytes32 id) {
+        id = _proposeRecovery(newOwner);
+    }
+
+    function _proposeRecovery(address newOwner) internal returns (bytes32 id) {
         id = keccak256(abi.encodePacked(address(this), block.chainid, newOwner));
         if (recoveryStart[id] == 0) {
             recoveryStart[id] = block.timestamp;
