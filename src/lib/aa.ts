@@ -110,6 +110,12 @@ export function dataProposeRecoveryBySelf(newOwner: string) {
   return iface.encodeFunctionData("proposeRecoveryBySelf", [newOwner]);
 }
 
+export async function getChainId(providerUrl: string) {
+  const res = await fetch(providerUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }) });
+  const json = await res.json();
+  return BigInt(json.result);
+}
+
 export function recoveryId(account: string, chainId: bigint, newOwner: string) {
   return ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["address","uint256","address"],[account, chainId, newOwner]));
 }
