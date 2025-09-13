@@ -26,6 +26,7 @@ const ACCOUNT_ABI = [
   "function setFrozenBySelf(bool v)",
   "function executeRecovery(bytes32 id)",
   "function proposeRecoveryBySelf(address newOwner)",
+  "function proposeRecovery(address newOwner)",
   "function recoveryStart(bytes32) view returns (uint256)",
   "function recoveryConfirms(bytes32) view returns (uint256)",
   "function recoveryNewOwner(bytes32) view returns (address)"

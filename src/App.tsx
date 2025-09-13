@@ -4,9 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Settings, Sparkles, WalletMinimal } from "lucide-react";
+import { Settings, Sparkles, WalletMinimal, Link2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { ethers } from "ethers";
+import { ethers, BrowserProvider } from "ethers";
 import { encodeExecuteAndBurn, estimateUserOp, getGasPrice, getUserOpHash, packInitCode, predictAccountAddress, sponsorUserOp, sendUserOp, UserOperation, getUserOpReceipt, encodeSelf, dataConfigureGuardiansBySelf, dataSetFrozenBySelf, dataProposeRecoveryBySelf, dataExecuteRecovery, recoveryId, readRecovery } from "./lib/aa";
 
 export default function Home() {
@@ -35,6 +35,12 @@ export default function Home() {
   const [recInfo, setRecInfo] = useState<{start?: bigint, confirms?: bigint, newOwner?: string} | null>(null);
 
   const rpc = useMemo(() => bundlerUrl ? bundlerUrl.split("?")[0] : "", [bundlerUrl]);
+
+  // Guardian approve via link
+  const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : "");
+  const approveMode = params.get('approve') === '1' || params.get('guardian') === '1';
+  const approveAccount = params.get('account') || "";
+  const approveNewOwner = params.get('newOwner') || "";
 
   useEffect(() => {
     (async () => {
@@ -332,6 +338,24 @@ export default function Home() {
       </header>
 
       <main className="mx-auto flex w-full max-w-6xl flex-col items-center gap-10 px-4 pb-20">
+        {approveMode && (
+          <Card className="w-full text-left">
+            <CardHeader><CardTitle>Guardian Approval</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">Approve recovery for account {approveAccount.slice(0,6)}…{approveAccount.slice(-4)} to new owner {approveNewOwner.slice(0,6)}…{approveNewOwner.slice(-4)}.</p>
+              <Button onClick={async ()=>{
+                if (!(window as any).ethereum) { alert('Install MetaMask or a wallet'); return; }
+                const provider = new BrowserProvider((window as any).ethereum);
+                await provider.send('wallet_switchEthereumChain', [{ chainId: '0x66EEE' }]).catch(()=>{});
+                const signer = await provider.getSigner();
+                const iface = new ethers.Interface(["function proposeRecovery(address newOwner)"]);
+                const data = iface.encodeFunctionData("proposeRecovery", [approveNewOwner]);
+                const tx = await signer.sendTransaction({ to: approveAccount, data });
+                alert(`Submitted: ${tx.hash}`);
+              }}>Connect wallet and Approve</Button>
+            </CardContent>
+          </Card>
+        )}
         <div className="relative mt-6 rounded-2xl border border-border/50 bg-gradient-to-br from-[#0b1220] to-background p-10 text-center shadow-[0_0_80px_-30px_#1EA7FD]">
           <div className="mx-auto max-w-3xl space-y-4">
             <div className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-black/30 px-3 py-1 text-xs text-primary">
@@ -395,6 +419,15 @@ export default function Home() {
                 <Button variant="outline" onClick={checkRecovery}>Check status</Button>
                 <Button variant="outline" onClick={executeRecoveryNow}>Execute</Button>
               </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label>Guardian approval link</Label>
+              <Button variant="outline" size="sm" onClick={()=>{
+                if (!accountAddr || !newOwner) { alert('Enter new owner and deploy account first'); return; }
+                const url = `${window.location.origin}?approve=1&account=${accountAddr}&newOwner=${newOwner}`;
+                navigator.clipboard.writeText(url);
+                alert('Copied: ' + url);
+              }}><Link2 className="mr-2 h-4 w-4"/>Copy</Button>
             </div>
             {recInfo && (
               <p className="text-xs text-muted-foreground">Confirms: {String(recInfo.confirms)} · New owner: {recInfo.newOwner}</p>
