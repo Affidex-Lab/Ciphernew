@@ -475,6 +475,7 @@ export default function Home() {
             </p>
           </CardContent>
         </Card>
+        )}
       </main>
 
       <Dialog open={openTransfer} onOpenChange={setOpenTransfer}>
