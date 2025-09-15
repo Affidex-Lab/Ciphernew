@@ -11,7 +11,7 @@ export default function Landing() {
         <div className="flex items-center gap-2">
           <span className="text-lg font-semibold tracking-tight">Cipher Wallet</span>
         </div>
-        <Button variant="outline" size="sm" onClick={()=>nav('/dashboard')}>Open App</Button>
+        <Button variant="outline" size="sm" onClick={()=>nav('/access')}>Access Wallet</Button>
       </header>
       <main className="mx-auto flex w-full max-w-6xl flex-col items-center gap-10 px-4 pb-20">
         <div className="relative mt-6 rounded-2xl border border-border/50 bg-gradient-to-br from-[#0b1220] to-background p-10 text-center shadow-[0_0_80px_-30px_#1EA7FD]">
@@ -28,7 +28,7 @@ export default function Landing() {
             </p>
             <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Button size="lg" onClick={()=>nav('/dashboard')}>Create Seedless Wallet</Button>
-              <Button variant="outline" size="lg" onClick={()=>nav('/dashboard')}>One‑time Private Transfer</Button>
+              <Button variant="outline" size="lg" onClick={()=>nav('/access')}>Access Wallet</Button>
             </div>
           </div>
         </div>
