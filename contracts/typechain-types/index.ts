@@ -20,6 +20,8 @@ export type { CipherP256Account } from "./src/accounts/CipherP256Account";
 export { CipherP256Account__factory } from "./factories/src/accounts/CipherP256Account__factory";
 export type { DisposableAccount } from "./src/accounts/DisposableAccount";
 export { DisposableAccount__factory } from "./factories/src/accounts/DisposableAccount__factory";
+export type { CipherAccountFactory } from "./src/factory/CipherAccountFactory";
+export { CipherAccountFactory__factory } from "./factories/src/factory/CipherAccountFactory__factory";
 export type { DisposableAccountFactory } from "./src/factory/DisposableAccountFactory";
 export { DisposableAccountFactory__factory } from "./factories/src/factory/DisposableAccountFactory__factory";
 export type { IEntryPoint } from "./src/interfaces/IEntryPoint";

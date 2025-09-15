@@ -27,7 +27,7 @@ export default function Landing() {
               Your funds, not your phrases. Automatic temp wallets and rotating keys.
             </p>
             <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Button size="lg" onClick={()=>nav('/dashboard')}>Create Seedless Wallet</Button>
+              <Button size="lg" onClick={()=>nav('/onboarding')}>Create Seedless Wallet</Button>
               <Button variant="outline" size="lg" onClick={()=>nav('/dashboard')}>One‑time Private Transfer</Button>
             </div>
           </div>

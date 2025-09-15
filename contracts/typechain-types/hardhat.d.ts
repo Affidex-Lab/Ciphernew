@@ -42,6 +42,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.DisposableAccount__factory>;
     getContractFactory(
+      name: "CipherAccountFactory",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.CipherAccountFactory__factory>;
+    getContractFactory(
       name: "DisposableAccountFactory",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.DisposableAccountFactory__factory>;
@@ -106,6 +110,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.DisposableAccount>;
     getContractAt(
+      name: "CipherAccountFactory",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.CipherAccountFactory>;
+    getContractAt(
       name: "DisposableAccountFactory",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -170,6 +179,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.DisposableAccount>;
     deployContract(
+      name: "CipherAccountFactory",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.CipherAccountFactory>;
+    deployContract(
       name: "DisposableAccountFactory",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.DisposableAccountFactory>;
@@ -233,6 +246,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.DisposableAccount>;
+    deployContract(
+      name: "CipherAccountFactory",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.CipherAccountFactory>;
     deployContract(
       name: "DisposableAccountFactory",
       args: any[],
