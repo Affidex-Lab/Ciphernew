@@ -67,6 +67,7 @@ export interface CipherAccountInterface extends Interface {
   getFunction(
     nameOrSignature:
       | "configureGuardians"
+      | "configureGuardiansBySelf"
       | "entryPoint"
       | "execute"
       | "executeRecovery"
@@ -77,6 +78,7 @@ export interface CipherAccountInterface extends Interface {
       | "isValidSignature"
       | "owner"
       | "proposeRecovery"
+      | "proposeRecoveryBySelf"
       | "recoveryApproved"
       | "recoveryConfirms"
       | "recoveryDelay"
@@ -85,6 +87,7 @@ export interface CipherAccountInterface extends Interface {
       | "recoveryThreshold"
       | "sessionKeys"
       | "setFrozen"
+      | "setFrozenBySelf"
       | "setOwner"
       | "setSessionKey"
       | "validateUserOp"
@@ -102,6 +105,10 @@ export interface CipherAccountInterface extends Interface {
 
   encodeFunctionData(
     functionFragment: "configureGuardians",
+    values: [AddressLike[], BigNumberish, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "configureGuardiansBySelf",
     values: [AddressLike[], BigNumberish, BigNumberish]
   ): string;
   encodeFunctionData(
@@ -139,6 +146,10 @@ export interface CipherAccountInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "proposeRecoveryBySelf",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "recoveryApproved",
     values: [BytesLike, AddressLike]
   ): string;
@@ -168,6 +179,10 @@ export interface CipherAccountInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "setFrozen", values: [boolean]): string;
   encodeFunctionData(
+    functionFragment: "setFrozenBySelf",
+    values: [boolean]
+  ): string;
+  encodeFunctionData(
     functionFragment: "setOwner",
     values: [AddressLike]
   ): string;
@@ -182,6 +197,10 @@ export interface CipherAccountInterface extends Interface {
 
   decodeFunctionResult(
     functionFragment: "configureGuardians",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "configureGuardiansBySelf",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "entryPoint", data: BytesLike): Result;
@@ -207,6 +226,10 @@ export interface CipherAccountInterface extends Interface {
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "proposeRecovery",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "proposeRecoveryBySelf",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -238,6 +261,10 @@ export interface CipherAccountInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "setFrozen", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "setFrozenBySelf",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "setOwner", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "setSessionKey",
@@ -384,6 +411,12 @@ export interface CipherAccount extends BaseContract {
     "nonpayable"
   >;
 
+  configureGuardiansBySelf: TypedContractMethod<
+    [addrs: AddressLike[], threshold: BigNumberish, delaySeconds: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   entryPoint: TypedContractMethod<[], [string], "view">;
 
   execute: TypedContractMethod<
@@ -416,6 +449,12 @@ export interface CipherAccount extends BaseContract {
     "nonpayable"
   >;
 
+  proposeRecoveryBySelf: TypedContractMethod<
+    [newOwner: AddressLike],
+    [string],
+    "nonpayable"
+  >;
+
   recoveryApproved: TypedContractMethod<
     [arg0: BytesLike, arg1: AddressLike],
     [boolean],
@@ -435,6 +474,8 @@ export interface CipherAccount extends BaseContract {
   sessionKeys: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
 
   setFrozen: TypedContractMethod<[v: boolean], [void], "nonpayable">;
+
+  setFrozenBySelf: TypedContractMethod<[v: boolean], [void], "nonpayable">;
 
   setOwner: TypedContractMethod<[newOwner: AddressLike], [void], "nonpayable">;
 
@@ -456,6 +497,13 @@ export interface CipherAccount extends BaseContract {
 
   getFunction(
     nameOrSignature: "configureGuardians"
+  ): TypedContractMethod<
+    [addrs: AddressLike[], threshold: BigNumberish, delaySeconds: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "configureGuardiansBySelf"
   ): TypedContractMethod<
     [addrs: AddressLike[], threshold: BigNumberish, delaySeconds: BigNumberish],
     [void],
@@ -500,6 +548,9 @@ export interface CipherAccount extends BaseContract {
     nameOrSignature: "proposeRecovery"
   ): TypedContractMethod<[newOwner: AddressLike], [string], "nonpayable">;
   getFunction(
+    nameOrSignature: "proposeRecoveryBySelf"
+  ): TypedContractMethod<[newOwner: AddressLike], [string], "nonpayable">;
+  getFunction(
     nameOrSignature: "recoveryApproved"
   ): TypedContractMethod<
     [arg0: BytesLike, arg1: AddressLike],
@@ -526,6 +577,9 @@ export interface CipherAccount extends BaseContract {
   ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
   getFunction(
     nameOrSignature: "setFrozen"
+  ): TypedContractMethod<[v: boolean], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "setFrozenBySelf"
   ): TypedContractMethod<[v: boolean], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "setOwner"
