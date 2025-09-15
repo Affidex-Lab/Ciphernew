@@ -32,9 +32,7 @@ export default function Landing() {
             </div>
           </div>
         </div>
-        <Card className="w-full max-w-6xl text-left">
-          <div className="p-6 text-sm text-muted-foreground">Get started by opening the app and configuring Bundler RPC, EntryPoint, factories, and policy (or keep defaults from server config).</div>
-        </Card>
+
       </main>
     </div>
   );
