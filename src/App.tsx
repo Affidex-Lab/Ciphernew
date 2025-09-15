@@ -34,6 +34,7 @@ export default function Home() {
   const [newOwner, setNewOwner] = useState("");
   const [recInfo, setRecInfo] = useState<{start?: bigint, confirms?: bigint, newOwner?: string} | null>(null);
   const [chainId, setChainId] = useState<bigint | null>(null);
+  const [balance, setBalance] = useState<string>("");
 
   const rpc = useMemo(() => bundlerUrl || "", [bundlerUrl]);
 
@@ -78,6 +79,31 @@ export default function Home() {
       } catch {}
     })();
   }, [rpc]);
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        // preload from localStorage for returning users
+        const lsAcc = localStorage.getItem('accountAddr');
+        const lsPk = localStorage.getItem('ownerPk');
+        const lsOwner = localStorage.getItem('ownerAddr');
+        if (lsAcc && !accountAddr) setAccountAddr(lsAcc);
+        if (lsPk && !ownerPk) setOwnerPk(lsPk);
+        if (lsOwner && !ownerAddr) setOwnerAddr(lsOwner);
+      }catch{}
+    })();
+  },[]);
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        if (!rpc || !accountAddr) { setBalance(""); return; }
+        const provider = new ethers.JsonRpcProvider(rpc);
+        const bal = await provider.getBalance(accountAddr);
+        setBalance(ethers.formatEther(bal));
+      }catch{}
+    })();
+  },[rpc, accountAddr]);
 
   function saveConfig() {
     localStorage.setItem("bundlerUrl", bundlerUrl);
@@ -369,24 +395,37 @@ export default function Home() {
             </CardContent>
           </Card>
         )}
-        <div className="relative mt-6 rounded-2xl border border-border/50 bg-gradient-to-br from-[#0b1220] to-background p-10 text-center shadow-[0_0_80px_-30px_#1EA7FD]">
-          <div className="mx-auto max-w-3xl space-y-4">
-            <div className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-black/30 px-3 py-1 text-xs text-primary">
-              <Sparkles size={12} />
-              <span>Privacy-first smart wallet</span>
-            </div>
-            <h1 className="text-balance text-4xl font-semibold leading-tight sm:text-5xl md:text-6xl">
-              Go seedless: automatic disposable wallets and one‑time keys for transaction‑level security.
-            </h1>
-            <p className="text-balance text-lg text-muted-foreground">
-              Your funds, not your phrases. Automatic temp wallets and rotating keys.
-            </p>
-            <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Button size="lg" onClick={() => { ensureOwner(); deployAccount(); }}>Create Seedless Wallet</Button>
-              <Button variant="outline" size="lg" onClick={() => { setOpenTransfer(true); setStep(1); }}>One‑time Private Transfer</Button>
+        {!accountAddr && (
+          <div className="relative mt-6 rounded-2xl border border-border/50 bg-gradient-to-br from-[#0b1220] to-background p-10 text-center shadow-[0_0_80px_-30px_#1EA7FD]">
+            <div className="mx-auto max-w-3xl space-y-4">
+              <div className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-black/30 px-3 py-1 text-xs text-primary">
+                <Sparkles size={12} />
+                <span>Privacy-first smart wallet</span>
+              </div>
+              <h1 className="text-balance text-4xl font-semibold leading-tight sm:text-5xl md:text-6xl">
+                Go seedless: automatic disposable wallets and one‑time keys for transaction‑level security.
+              </h1>
+              <p className="text-balance text-lg text-muted-foreground">
+                Your funds, not your phrases. Automatic temp wallets and rotating keys.
+              </p>
             </div>
           </div>
-        </div>
+        )}
+
+        {accountAddr && (
+          <Card className="w-full max-w-6xl text-left">
+            <CardHeader><CardTitle>Your Wallet</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">Account: {accountAddr.slice(0,6)}…{accountAddr.slice(-4)}{ownerAddr? ` · Owner: ${ownerAddr.slice(0,6)}…${ownerAddr.slice(-4)}`: ''}</p>
+              <p className="text-sm">Balance: {balance? `${balance} ETH` : '—'}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button onClick={() => { setOpenTransfer(true); setStep(1); }}>One‑time Private Transfer</Button>
+                <Button variant="outline" onClick={()=>toggleFreeze(true)}>Freeze</Button>
+                <Button variant="outline" onClick={()=>toggleFreeze(false)}>Unfreeze</Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="w-full max-w-6xl text-left">
           <CardHeader><CardTitle>Status</CardTitle></CardHeader>
@@ -397,25 +436,11 @@ export default function Home() {
             )}
           </CardContent>
         </Card>
+        {accountAddr && (
         <Card className="w-full max-w-6xl text-left">
-          <CardHeader><CardTitle>Seedless Smart Wallet (Owner + Guardians)</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Wallet Controls (Guardians & Recovery)</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={()=>{ const w=ensureOwner(); setOwnerPk(w.privateKey); setOwnerAddr(w.address); }}>Generate Owner Key</Button>
-              <Button variant="outline" onClick={deployAccount}>Deploy Account</Button>
-              <Button variant="outline" onClick={()=>toggleFreeze(true)}>Freeze</Button>
-              <Button variant="outline" onClick={()=>toggleFreeze(false)}>Unfreeze</Button>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <Label>Owner Address</Label>
-                <Input readOnly value={ownerAddr || ''} placeholder="Click 'Generate Owner Key'" />
-              </div>
-              <div>
-                <Label>Predicted Account</Label>
-                <Input readOnly value={accountAddr || ''} placeholder="Click 'Deploy Account'" />
-              </div>
-            </div>
+
             <div className="grid gap-3 sm:grid-cols-3">
               <div><Label>Guardian 1</Label><Input value={g1} onChange={(e)=>setG1(e.target.value)} placeholder="0x..."/></div>
               <div><Label>Guardian 2</Label><Input value={g2} onChange={(e)=>setG2(e.target.value)} placeholder="0x..."/></div>
@@ -436,8 +461,8 @@ export default function Home() {
             <div className="flex items-center gap-2">
               <Label>Guardian approval link</Label>
               <Button variant="outline" size="sm" onClick={()=>{
-                if (!accountAddr || !newOwner) { alert('Enter new owner and deploy account first'); return; }
-                const url = `${window.location.origin}?approve=1&account=${accountAddr}&newOwner=${newOwner}`;
+                if (!accountAddr || !newOwner) { alert('Enter new owner first'); return; }
+                const url = `${window.location.origin}/approve?account=${accountAddr}&newOwner=${newOwner}`;
                 navigator.clipboard.writeText(url);
                 alert('Copied: ' + url);
               }}><Link2 className="mr-2 h-4 w-4"/>Copy</Button>
