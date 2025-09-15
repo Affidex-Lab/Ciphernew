@@ -2,8 +2,8 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "/project/workspace/Affidex-Lab/Ciphernew/contracts/src/accounts/CipherAccount.sol": {
-      "lastModificationDate": 1757387771970,
-      "contentHash": "735ef374352588b4ab57386597d39ba1",
+      "lastModificationDate": 1757870825971,
+      "contentHash": "54495d1d4f874fa506eb5f94198b1859",
       "sourceName": "src/accounts/CipherAccount.sol",
       "solcConfig": {
         "version": "0.8.24",
@@ -604,6 +604,44 @@
       ],
       "artifacts": [
         "TestTarget"
+      ]
+    },
+    "/project/workspace/Affidex-Lab/Ciphernew/contracts/src/factory/CipherAccountFactory.sol": {
+      "lastModificationDate": 1757764256869,
+      "contentHash": "58d971142cc8daa629b05fdcd218c9b3",
+      "sourceName": "src/factory/CipherAccountFactory.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../accounts/CipherAccount.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "CipherAccountFactory"
       ]
     }
   }

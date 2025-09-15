@@ -2,11 +2,13 @@
 pragma solidity ^0.8.24;
 
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import {IEntryPoint, UserOperation} from "../interfaces/IEntryPoint.sol";
 
 contract CipherAccount is IERC1271 {
     using ECDSA for bytes32;
+    using MessageHashUtils for bytes32;
 
     address public immutable entryPoint;
     address public owner;

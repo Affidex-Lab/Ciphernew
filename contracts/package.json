@@ -10,12 +10,13 @@
     "test": "hardhat test"
   },
   "devDependencies": {
-    "@nomicfoundation/hardhat-ethers": "^3.0.6",
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.4",
+    "@nomicfoundation/hardhat-ethers": "^3.0.6",
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@types/chai": "^4.3.11",
     "@types/mocha": "^10.0.7",
     "chai": "^4.4.1",
+    "dotenv": "^17.2.2",
     "ethers": "^6.13.1",
     "hardhat": "^2.22.10",
     "ts-node": "^10.9.2",
