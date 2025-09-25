@@ -18,10 +18,17 @@ export default function Access(){
   useEffect(()=>{
     (async()=>{
       try{
+        const DEFAULTS = {
+          bundlerUrl: "https://api.pimlico.io/v2/421614/rpc?apikey=pim_kBDzXSD66Uh8PFLaiUhEHZ",
+          entryPoint: "0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108",
+          disposableFactory: "0xfFa7a8DB30B46cEb36685b01D766fabE298080c1",
+          accountFactory: "0x8a060835a49BaCD214da97B258D5d2FE58545330",
+          policyId: "sp_certain_mathemanic",
+        };
         let serverCfg: any = {};
         try{ const res = await fetch('/config.json', { cache: 'no-store' }); if (res.ok) serverCfg = await res.json(); }catch{}
         const ls = (k:string)=> localStorage.getItem(k) || "";
-        setBundlerUrl(ls('bundlerUrl') || serverCfg.bundlerUrl || "");
+        setBundlerUrl(ls('bundlerUrl') || serverCfg.bundlerUrl || DEFAULTS.bundlerUrl);
         const qs = new URLSearchParams(typeof window!== 'undefined' ? window.location.search : "");
         const acc = qs.get('account') || ""; if (acc) setAccountAddr(acc);
       }catch{}

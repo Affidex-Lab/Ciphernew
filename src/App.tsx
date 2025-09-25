@@ -270,6 +270,14 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       try {
+        const DEFAULTS = {
+          bundlerUrl: "https://api.pimlico.io/v2/421614/rpc?apikey=pim_kBDzXSD66Uh8PFLaiUhEHZ",
+          entryPoint: "0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108",
+          disposableFactory: "0xfFa7a8DB30B46cEb36685b01D766fabE298080c1",
+          accountFactory: "0x8a060835a49BaCD214da97B258D5d2FE58545330",
+          policyId: "sp_certain_mathemanic",
+        };
+
         const envBundler = (import.meta as any).env?.VITE_BUNDLER_URL || "";
         const envEntry = (import.meta as any).env?.VITE_ENTRYPOINT || "";
         const envFactory = (import.meta as any).env?.VITE_FACTORY || "";
@@ -284,11 +292,11 @@ export default function Dashboard() {
 
         const ls = (k: string) => localStorage.getItem(k) || "";
 
-        setBundlerUrl(ls("bundlerUrl") || serverCfg.bundlerUrl || envBundler);
-        setEntryPoint(ls("entryPoint") || serverCfg.entryPoint || envEntry);
-        setFactory(ls("factory") || serverCfg.disposableFactory || serverCfg.factory || envFactory);
-        setAccFactory(ls("accFactory") || serverCfg.accountFactory || envAccFactory);
-        setPolicyId(ls("policyId") || serverCfg.policyId || envPolicy);
+        setBundlerUrl(ls("bundlerUrl") || serverCfg.bundlerUrl || envBundler || DEFAULTS.bundlerUrl);
+        setEntryPoint(ls("entryPoint") || serverCfg.entryPoint || envEntry || DEFAULTS.entryPoint);
+        setFactory(ls("factory") || serverCfg.disposableFactory || serverCfg.factory || envFactory || DEFAULTS.disposableFactory);
+        setAccFactory(ls("accFactory") || serverCfg.accountFactory || envAccFactory || DEFAULTS.accountFactory);
+        setPolicyId(ls("policyId") || serverCfg.policyId || envPolicy || DEFAULTS.policyId);
       } catch {}
     })();
   }, []);
