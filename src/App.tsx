@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Settings, WalletMinimal, ChevronDown, Bell, Home as HomeIcon, Compass, ActivitySquare } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -51,6 +52,25 @@ export default function Dashboard() {
   type Token = { address: string; symbol: string; name: string; decimals: number; balance: string };
   const [tokens, setTokens] = useState<Token[]>([]);
   const [newTokenAddr, setNewTokenAddr] = useState<string>("");
+
+  type KnownToken = { address: string; symbol: string; name: string; decimals: number };
+  const KNOWN_TOKENS: Record<string, KnownToken[]> = {
+    "42161": [
+      { address: "0x82af49447d8a07e3bd95bd0d56f35241523fbab1", symbol: "WETH", name: "Wrapped Ether", decimals: 18 },
+      { address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", symbol: "USDC", name: "USD Coin", decimals: 6 },
+      { address: "0xFF970A61A04b1cA14834A43f5de4533ebDDB5CC8", symbol: "USDC.e", name: "USD Coin (Bridged)", decimals: 6 },
+      { address: "0xFd086bC7CD5C481DCC9C85ebe478A1C0b69FCbb9", symbol: "USDT", name: "Tether USD", decimals: 6 },
+      { address: "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1", symbol: "DAI", name: "Dai Stablecoin", decimals: 18 },
+      { address: "0x912CE59144191C1204E64559FE8253a0e49E6548", symbol: "ARB", name: "Arbitrum", decimals: 18 },
+      { address: "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f", symbol: "WBTC", name: "Wrapped BTC", decimals: 8 },
+    ],
+    "421614": [],
+  };
+
+  const [openAddToken, setOpenAddToken] = useState(false);
+  const [addMode, setAddMode] = useState<"search"|"custom">("search");
+  const [addNetKey, setAddNetKey] = useState<string>("arbitrum-sepolia");
+  const [tokenQuery, setTokenQuery] = useState("");
   const DEFAULT_TOKEN_ADDRESSES: Record<string, string[]> = {
     "42161": [
       "0x82af49447d8a07e3bd95bd0d56f35241523fbab1", // WETH
@@ -655,16 +675,20 @@ export default function Dashboard() {
     } catch {}
   }
 
+  function addTokenAddressToList(addr: string){
+    const key = `tokens:${String(chainId||"")}`;
+    const list = JSON.parse(localStorage.getItem(key) || "[]") as string[];
+    if (!list.includes(addr)) {
+      list.push(addr);
+      localStorage.setItem(key, JSON.stringify(list));
+    }
+  }
+
   async function addToken() {
     try {
       const addr = newTokenAddr.trim();
       if (!ethers.isAddress(addr)) { alert("Enter a valid token address"); return; }
-      const key = `tokens:${String(chainId||"")}`;
-      const list = JSON.parse(localStorage.getItem(key) || "[]") as string[];
-      if (!list.includes(addr)) {
-        list.push(addr);
-        localStorage.setItem(key, JSON.stringify(list));
-      }
+      addTokenAddressToList(addr);
       setNewTokenAddr("");
       await refreshTokens();
     } catch (e: any) {
@@ -799,16 +823,23 @@ export default function Dashboard() {
             </div>
 
             <Tabs defaultValue="tokens" className="w-full">
-              <TabsList>
-                <TabsTrigger value="tokens">Tokens</TabsTrigger>
-                <TabsTrigger value="defi">DeFi</TabsTrigger>
-                <TabsTrigger value="nfts">NFTs</TabsTrigger>
-              </TabsList>
+              <div className="flex items-center justify-between">
+                <TabsList>
+                  <TabsTrigger value="tokens">Tokens</TabsTrigger>
+                  <TabsTrigger value="defi">DeFi</TabsTrigger>
+                  <TabsTrigger value="nfts">NFTs</TabsTrigger>
+                </TabsList>
+                <Button variant="outline" size="sm" onClick={()=>{ setAddMode("search"); setAddNetKey(activeNetworkKey); setOpenAddToken(true); }}>+ Add</Button>
+              </div>
               <TabsContent value="tokens" className="mt-2">
                 <Card className="w-full text-left">
                   <CardContent className="space-y-4 pt-6">
                     <div className="space-y-1">
-                      {tokens.length === 0 && (<p className="text-xs text-muted-foreground">No tokens yet — common tokens for this network will appear here.</p>)}
+                      <div className="flex justify-between text-sm">
+                        <div>ETH <span className="text-muted-foreground">· Ether</span></div>
+                        <div>{balance || '0'}</div>
+                      </div>
+                      {tokens.length === 0 && (<p className="text-xs text-muted-foreground">No tokens yet — add from “+ Add”.</p>)}
                       {tokens.map(t => (
                         <div key={t.address} className="flex justify-between text-sm">
                           <div>{t.symbol} <span className="text-muted-foreground">· {t.name}</span></div>
@@ -816,17 +847,6 @@ export default function Dashboard() {
                         </div>
                       ))}
                     </div>
-                    <details>
-                      <summary className="cursor-pointer text-xs text-muted-foreground">Advanced</summary>
-                      <div className="mt-2 flex items-end gap-2">
-                        <div className="flex-1">
-                          <Label>Add custom token (ERC‑20 address)</Label>
-                          <Input value={newTokenAddr} onChange={(e)=>setNewTokenAddr(e.target.value)} placeholder="0x..." />
-                        </div>
-                        <Button onClick={addToken}>Add</Button>
-                        <Button variant="outline" onClick={discoverTokens}>Discover tokens</Button>
-                      </div>
-                    </details>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -942,6 +962,66 @@ export default function Dashboard() {
                 <Button variant="outline" onClick={()=>{ if(accountAddr) navigator.clipboard.writeText(accountAddr); }}>Copy</Button>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={openAddToken} onOpenChange={setOpenAddToken}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add token</DialogTitle>
+            </DialogHeader>
+            <Tabs defaultValue={addMode} onValueChange={(v)=> setAddMode(v as any)} className="w-full">
+              <TabsList>
+                <TabsTrigger value="search">Search</TabsTrigger>
+                <TabsTrigger value="custom">Custom</TabsTrigger>
+              </TabsList>
+              <div className="mt-2 space-y-3">
+                <div>
+                  <Label>Network</Label>
+                  <Select value={addNetKey} onValueChange={setAddNetKey}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Select network" /></SelectTrigger>
+                    <SelectContent>
+                      {NETWORKS.map(n=> (
+                        <SelectItem key={n.key} value={n.key}>{n.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {addMode === 'search' ? (
+                  <div className="space-y-3">
+                    <div>
+                      <Label>Search tokens</Label>
+                      <Input value={tokenQuery} onChange={(e)=>setTokenQuery(e.target.value)} placeholder="Search by name or symbol" />
+                    </div>
+                    <div className="max-h-60 overflow-auto rounded border">
+                      {(KNOWN_TOKENS[String(NETWORKS.find(n=>n.key===addNetKey)?.chainId || '')] || [])
+                        .filter(t=> (t.symbol+t.name).toLowerCase().includes(tokenQuery.toLowerCase()))
+                        .slice(0,50)
+                        .map(t=> (
+                          <div key={t.address} className="flex items-center justify-between border-b px-3 py-2 text-sm last:border-b-0">
+                            <div>{t.symbol} <span className="text-muted-foreground">· {t.name}</span></div>
+                            <Button size="sm" onClick={()=>{ addTokenAddressToList(t.address); refreshTokens(); setOpenAddToken(false); }}>Add</Button>
+                          </div>
+                        ))}
+                      {((KNOWN_TOKENS[String(NETWORKS.find(n=>n.key===addNetKey)?.chainId || '')] || []).length===0) && (
+                        <div className="p-3 text-xs text-muted-foreground">No indexed tokens for this network yet.</div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <Label>Token contract address</Label>
+                      <Input value={newTokenAddr} onChange={(e)=>setNewTokenAddr(e.target.value)} placeholder="0x..." />
+                    </div>
+                    <div className="flex justify-end">
+                      <Button onClick={async()=>{ await addToken(); setOpenAddToken(false); }}>Add custom token</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Tabs>
           </DialogContent>
         </Dialog>
         <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
