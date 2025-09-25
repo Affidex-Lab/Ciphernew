@@ -64,7 +64,7 @@ export default function Access(){
             </div>
             <div className="flex gap-2">
               <Button onClick={load}>Access Wallet</Button>
-              <Button variant="outline" onClick={()=>nav('/onboarding')}>Create new</Button>
+              <Button variant="outline" onClick={()=>nav('/dashboard?autocreate=1')}>Create new</Button>
             </div>
           </CardContent>
         </Card>
