@@ -248,7 +248,7 @@ export default function Dashboard() {
     setOwnerAddr(w.address);
     localStorage.setItem("ownerPk", w.privateKey);
     localStorage.setItem("ownerAddr", w.address);
-    const s = ethers.zeroPadValue(ethers.toBeHex(ethers.randomBytes(32)), 32);
+    const s = ethers.hexlify(ethers.randomBytes(32));
     setAccSalt(s);
     return w;
   }
@@ -309,7 +309,7 @@ export default function Dashboard() {
 
       const ownerWallet = ethers.Wallet.createRandom();
       const owner = ownerWallet.address;
-      const salt = ethers.zeroPadValue(ethers.toBeHex(ethers.randomBytes(32)), 32);
+      const salt = ethers.hexlify(ethers.randomBytes(32));
 
       const sender = await predictAccountAddress(rpc, factory, entryPoint, owner, salt);
       const value = ethers.parseEther((amount || "0").toString());

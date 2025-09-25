@@ -54,7 +54,7 @@ export default function Onboarding(){
     const w = ethers.Wallet.createRandom();
     setOwnerPk(w.privateKey);
     setOwnerAddr(w.address);
-    const s = ethers.zeroPadValue(ethers.toBeHex(ethers.randomBytes(32)), 32);
+    const s = ethers.hexlify(ethers.randomBytes(32));
     setAccSalt(s);
     return w;
   }
