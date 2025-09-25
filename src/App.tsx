@@ -349,7 +349,7 @@ export default function Dashboard() {
 
       setStatus((s) => s + "\nComputing userOpHash...");
       const uoh = await getUserOpHash(rpc, entryPoint, userOp);
-      const sig = await ethers.Wallet.createRandom().signMessage(ethers.getBytes(uoh));
+      const sig = await ownerWallet.signMessage(ethers.getBytes(uoh));
       userOp.signature = sig;
 
       setStatus((s) => s + "\nSending user operation...");
