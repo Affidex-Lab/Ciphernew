@@ -36,6 +36,9 @@ const EP_ABI = [
   "function getUserOpHash((address,uint256,bytes,bytes,uint256,uint256,uint256,uint256,uint256,bytes,bytes)) view returns (bytes32)"
 ];
 
+function jsonHex(v: any){ return typeof v === 'bigint' ? ('0x'+v.toString(16)) : v; }
+function stringify(obj: any){ return JSON.stringify(obj, (_k, v)=> jsonHex(v)); }
+
 export async function sponsorUserOp(bundlerUrl: string, userOp: UserOperation, entryPoint: string, sponsorshipPolicyId: string) {
   const body = {
     jsonrpc: "2.0",
@@ -43,7 +46,7 @@ export async function sponsorUserOp(bundlerUrl: string, userOp: UserOperation, e
     method: "pm_sponsorUserOperation",
     params: [ userOp, entryPoint, { sponsorshipPolicyId } ]
   };
-  const res = await fetch(bundlerUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const res = await fetch(bundlerUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: stringify(body) });
   if (!res.ok) throw new Error(`pm_sponsorUserOperation failed: ${res.status}`);
   const json = await res.json();
   if (json.error) throw new Error(json.error.message || "sponsor error");
@@ -59,7 +62,7 @@ export async function getGasPrice(bundlerUrl: string) {
 }
 
 export async function estimateUserOp(bundlerUrl: string, userOp: UserOperation, entryPoint: string) {
-  const res = await fetch(bundlerUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_estimateUserOperationGas", params: [ userOp, entryPoint ] }) });
+  const res = await fetch(bundlerUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: stringify({ jsonrpc: "2.0", id: 1, method: "eth_estimateUserOperationGas", params: [ userOp, entryPoint ] }) });
   const json = await res.json();
   if (json.error) throw new Error(json.error.message || "estimate error");
   return json.result as { preVerificationGas: string, verificationGasLimit: string, callGasLimit: string };
@@ -143,7 +146,7 @@ export async function getUserOpHash(rpc: string, entryPoint: string, userOp: Use
 
 export async function sendUserOp(bundlerUrl: string, userOp: UserOperation, entryPoint: string) {
   const body = { jsonrpc: "2.0", id: 1, method: "eth_sendUserOperation", params: [ userOp, entryPoint ] };
-  const res = await fetch(bundlerUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const res = await fetch(bundlerUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: stringify(body) });
   const json = await res.json();
   if (json.error) throw new Error(json.error.message || "send error");
   return json.result as string; // userOpHash
@@ -151,7 +154,7 @@ export async function sendUserOp(bundlerUrl: string, userOp: UserOperation, entr
 
 export async function getUserOpReceipt(bundlerUrl: string, userOpHash: string) {
   const body = { jsonrpc: "2.0", id: 1, method: "eth_getUserOperationReceipt", params: [ userOpHash ] };
-  const res = await fetch(bundlerUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const res = await fetch(bundlerUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: stringify(body) });
   const json = await res.json();
   if (json.error) return null;
   return json.result as { receipt?: { transactionHash: string } } | null;
