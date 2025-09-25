@@ -71,6 +71,7 @@ export default function Dashboard() {
   const [addMode, setAddMode] = useState<"search"|"custom">("search");
   const [addNetKey, setAddNetKey] = useState<string>("arbitrum-sepolia");
   const [tokenQuery, setTokenQuery] = useState("");
+  const [tokenIndex, setTokenIndex] = useState<Record<string, KnownToken[]>>({});
   const DEFAULT_TOKEN_ADDRESSES: Record<string, string[]> = {
     "42161": [
       "0x82af49447d8a07e3bd95bd0d56f35241523fbab1", // WETH
@@ -392,8 +393,47 @@ export default function Dashboard() {
         }
       } catch {}
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chainId]);
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const sources = [
+          "https://tokens.uniswap.org",
+          "https://gateway.ipfs.io/ipns/tokens.uniswap.org",
+          "https://tokenlist.arbitrum.io/ArbTokenLists/arbed_erc20_tokens.json"
+        ];
+        const lists: any[] = [];
+        for (const url of sources){
+          try{ const r = await fetch(url, { cache: "no-store" }); if (r.ok){ const j = await r.json(); lists.push(j);} }catch{}
+        }
+        const byChain: Record<string, KnownToken[]> = {};
+        for (const l of lists){
+          const toks = l.tokens || l; // some lists are plain arrays
+          if (Array.isArray(toks)){
+            for (const t of toks){
+              const cid = String(t.chainId || t.chainID || "");
+              if (!cid) continue;
+              const arr = byChain[cid] || (byChain[cid]=[]);
+              const addr = (t.address || "").toLowerCase();
+              if (!addr) continue;
+              if (!arr.some(x=>x.address.toLowerCase()===addr)){
+                arr.push({ address: t.address, symbol: t.symbol||"", name: t.name||"", decimals: Number(t.decimals||18) });
+              }
+            }
+          }
+        }
+        // Merge curated defaults
+        for (const cid of Object.keys(DEFAULT_TOKEN_ADDRESSES)){
+          const cur = byChain[cid] || (byChain[cid]=[]);
+          for (const a of DEFAULT_TOKEN_ADDRESSES[cid]){
+            if (!cur.some(x=>x.address.toLowerCase()===a.toLowerCase())) cur.push({ address: a, symbol: "", name: "", decimals: 18 });
+          }
+        }
+        setTokenIndex(byChain);
+      }catch{}
+    })();
+  },[]);
 
   useEffect(() => {
     (async () => {
@@ -655,24 +695,38 @@ export default function Dashboard() {
     try {
       if (!rpc || !accountAddr) return;
       const provider = new ethers.JsonRpcProvider(rpc);
-      const stored = JSON.parse(localStorage.getItem(`tokens:${String(chainId||"")}`) || "[]") as string[];
+      const key = `tokens:${String(chainId||"")}`;
+      const stored = JSON.parse(localStorage.getItem(key) || "[]") as string[];
       const next: Token[] = [];
       for (const addr of stored) {
+        const a = addr as string;
         try {
-          const erc20 = new ethers.Contract(addr, [
+          const erc20 = new ethers.Contract(a, [
             "function name() view returns (string)",
             "function symbol() view returns (string)",
             "function decimals() view returns (uint8)",
             "function balanceOf(address) view returns (uint256)",
           ], provider);
-          const [name, symbol, decimals, raw] = await Promise.all([
-            erc20.name(), erc20.symbol(), erc20.decimals(), erc20.balanceOf(accountAddr)
-          ]);
-          next.push({ address: addr, name, symbol, decimals, balance: ethers.formatUnits(raw, decimals) });
+          let name = "", symbol = "", decimals = 18, raw: bigint = 0n;
+          try { name = await erc20.name(); } catch {}
+          try { symbol = await erc20.symbol(); } catch {}
+          try { decimals = Number(await erc20.decimals()); } catch {}
+          try { raw = await erc20.balanceOf(accountAddr); } catch {}
+          next.push({ address: a, name: name||"Token", symbol: symbol||"ERC20", decimals, balance: ethers.formatUnits(raw, decimals) });
         } catch {}
       }
       setTokens(next);
     } catch {}
+  }
+
+  function addTokenAddressToList(addr: string, targetChainId?: number | string){
+    const cid = String(targetChainId ?? chainId ?? "");
+    const key = `tokens:${cid}`;
+    const list = JSON.parse(localStorage.getItem(key) || "[]") as string[];
+    if (!list.includes(addr)) {
+      list.push(addr);
+      localStorage.setItem(key, JSON.stringify(list));
+    }
   }
 
   function addTokenAddressToList(addr: string){
@@ -995,16 +1049,16 @@ export default function Dashboard() {
                       <Input value={tokenQuery} onChange={(e)=>setTokenQuery(e.target.value)} placeholder="Search by name or symbol" />
                     </div>
                     <div className="max-h-60 overflow-auto rounded border">
-                      {(KNOWN_TOKENS[String(NETWORKS.find(n=>n.key===addNetKey)?.chainId || '')] || [])
+                      {((tokenIndex[String(NETWORKS.find(n=>n.key===addNetKey)?.chainId || '')] || KNOWN_TOKENS[String(NETWORKS.find(n=>n.key===addNetKey)?.chainId || '')] || [])
                         .filter(t=> (t.symbol+t.name).toLowerCase().includes(tokenQuery.toLowerCase()))
-                        .slice(0,50)
+                        .slice(0,100)
                         .map(t=> (
                           <div key={t.address} className="flex items-center justify-between border-b px-3 py-2 text-sm last:border-b-0">
-                            <div>{t.symbol} <span className="text-muted-foreground">· {t.name}</span></div>
-                            <Button size="sm" onClick={()=>{ addTokenAddressToList(t.address); refreshTokens(); setOpenAddToken(false); }}>Add</Button>
+                            <div>{t.symbol || 'Token'} <span className="text-muted-foreground">· {t.name || ''}</span></div>
+                            <Button size="sm" onClick={()=>{ const targetCid = NETWORKS.find(n=>n.key===addNetKey)?.chainId; addTokenAddressToList(t.address, targetCid); if (String(targetCid)===String(chainId)) { refreshTokens(); } else { alert('Added to '+ (NETWORKS.find(n=>n.key===addNetKey)?.name||'network') +'. Switch network to view.'); } setOpenAddToken(false); }}>Add</Button>
                           </div>
                         ))}
-                      {((KNOWN_TOKENS[String(NETWORKS.find(n=>n.key===addNetKey)?.chainId || '')] || []).length===0) && (
+                      {(((tokenIndex[String(NETWORKS.find(n=>n.key===addNetKey)?.chainId || '')] || KNOWN_TOKENS[String(NETWORKS.find(n=>n.key===addNetKey)?.chainId || '')] || []).length)===0) && (
                         <div className="p-3 text-xs text-muted-foreground">No indexed tokens for this network yet.</div>
                       )}
                     </div>
