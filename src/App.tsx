@@ -360,21 +360,27 @@ export default function Dashboard() {
     location.reload();
   }
 
-  function ensureOwner() {
-    if (ownerPk && ownerAddr && accSalt) return new ethers.Wallet(ownerPk);
-    const w = ethers.Wallet.createRandom();
-    setOwnerPk(w.privateKey);
-    setOwnerAddr(w.address);
-    localStorage.setItem("ownerPk", w.privateKey);
-    localStorage.setItem("ownerAddr", w.address);
-    const s = ethers.hexlify(ethers.randomBytes(32));
-    setAccSalt(s);
-    return w;
+  function ensureOwnerAndSalt() {
+    let w: ethers.Wallet;
+    if (ownerPk && ownerAddr) {
+      w = new ethers.Wallet(ownerPk);
+    } else {
+      w = ethers.Wallet.createRandom();
+      setOwnerPk(w.privateKey);
+      setOwnerAddr(w.address);
+      localStorage.setItem("ownerPk", w.privateKey);
+      localStorage.setItem("ownerAddr", w.address);
+    }
+    let s = accSalt;
+    if (!s) {
+      s = ethers.hexlify(ethers.randomBytes(32));
+      setAccSalt(s);
+    }
+    return { w, salt: s as string };
   }
 
   async function deployAccount() {
-    const w = ensureOwner();
-    const salt = accSalt!;
+    const { w, salt } = ensureOwnerAndSalt();
     const predicted = await predictAccountAddress(rpc, accFactory, entryPoint, w.address, salt);
     setAccountAddr(predicted);
     localStorage.setItem("accountAddr", predicted);
