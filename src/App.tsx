@@ -30,6 +30,7 @@ export default function Dashboard() {
   const [accFactory, setAccFactory] = useState("");
 
   const [openTransfer, setOpenTransfer] = useState(false);
+  const [openReceive, setOpenReceive] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("0");
@@ -46,6 +47,18 @@ export default function Dashboard() {
   type Token = { address: string; symbol: string; name: string; decimals: number; balance: string };
   const [tokens, setTokens] = useState<Token[]>([]);
   const [newTokenAddr, setNewTokenAddr] = useState<string>("");
+  const DEFAULT_TOKEN_ADDRESSES: Record<string, string[]> = {
+    "42161": [
+      "0x82af49447d8a07e3bd95bd0d56f35241523fbab1", // WETH
+      "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", // USDC
+      "0xFF970A61A04b1cA14834A43f5de4533ebDDB5CC8", // USDC.e
+      "0xFd086bC7CD5C481DCC9C85ebe478A1C0b69FCbb9", // USDT
+      "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1", // DAI
+      "0x912CE59144191C1204E64559FE8253a0e49E6548", // ARB
+      "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f"  // WBTC
+    ],
+    "421614": []
+  };
 
   type HistoryItem = { time: number; kind: string; details: string; uoHash?: string; txHash?: string; status?: "pending" | "confirmed" | "failed" };
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -314,6 +327,24 @@ export default function Dashboard() {
       } catch {}
     })();
   }, [rpc]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!chainId) return;
+        const key = `tokens:${String(chainId)}`;
+        const list = JSON.parse(localStorage.getItem(key) || "[]") as string[];
+        if (list.length === 0) {
+          const seed = DEFAULT_TOKEN_ADDRESSES[String(chainId)] || [];
+          if (seed.length) {
+            localStorage.setItem(key, JSON.stringify(seed));
+            await refreshTokens();
+          }
+        }
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chainId]);
 
   useEffect(() => {
     (async () => {
@@ -663,26 +694,35 @@ export default function Dashboard() {
                 <p className="text-sm text-muted-foreground">Account: {accountAddr.slice(0,6)}…{accountAddr.slice(-4)}{ownerAddr? ` · Owner: ${ownerAddr.slice(0,6)}…${ownerAddr.slice(-4)}`: ''}</p>
                 <p className="text-sm">ETH: {balance? `${balance}` : '—'}</p>
                 <div className="space-y-2">
-                  <div className="flex items-end gap-2">
-                    <div className="flex-1">
-                      <Label>Add token (ERC-20 address)</Label>
-                      <Input value={newTokenAddr} onChange={(e)=>setNewTokenAddr(e.target.value)} placeholder="0x..." />
-                    </div>
-                    <Button onClick={addToken}>Add</Button>
-                    <Button variant="outline" onClick={discoverTokens}>Discover tokens</Button>
-                  </div>
                   <div className="space-y-1">
-                    {tokens.length === 0 && (<p className="text-xs text-muted-foreground">No tokens added yet.</p>)}
+                    {tokens.length === 0 && (<p className="text-xs text-muted-foreground">No tokens yet — common tokens for this network will appear here.</p>)}
                     {tokens.map(t => (
                       <div key={t.address} className="flex justify-between text-sm">
                         <div>{t.symbol} <span className="text-muted-foreground">· {t.name}</span></div>
-                        <div>{t.balance}</div>
+                        <div>{t.balance || '0'}</div>
                       </div>
                     ))}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button onClick={() => { setOpenTransfer(true); setStep(1); }}>Transfer</Button>
+                  <Button onClick={() => { setOpenTransfer(true); setStep(1); }}>Send</Button>
+                  <Button variant="outline" onClick={()=>setOpenReceive(true)}>Receive</Button>
+                  <Button variant="outline" onClick={()=>{
+                    alert('Buy coming soon. Use your favorite on‑ramp to deposit to '+accountAddr);
+                  }}>Buy</Button>
+                </div>
+                <div className="pt-2">
+                  <details>
+                    <summary className="cursor-pointer text-xs text-muted-foreground">Advanced</summary>
+                    <div className="mt-2 flex items-end gap-2">
+                      <div className="flex-1">
+                        <Label>Add custom token (ERC‑20 address)</Label>
+                        <Input value={newTokenAddr} onChange={(e)=>setNewTokenAddr(e.target.value)} placeholder="0x..." />
+                      </div>
+                      <Button onClick={addToken}>Add</Button>
+                      <Button variant="outline" onClick={discoverTokens}>Discover tokens</Button>
+                    </div>
+                  </details>
                 </div>
               </CardContent>
             </Card>
@@ -773,6 +813,24 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={openReceive} onOpenChange={setOpenReceive}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Receive</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">Share your address or scan the QR to receive funds on this network.</p>
+              <div className="flex items-center justify-center">
+                <img alt="QR" src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${accountAddr || ''}`} className="rounded bg-white p-2" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Input readOnly value={accountAddr || ''} />
+                <Button variant="outline" onClick={()=>{ if(accountAddr) navigator.clipboard.writeText(accountAddr); }}>Copy</Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       </main>
