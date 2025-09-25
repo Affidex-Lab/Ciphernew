@@ -23,6 +23,7 @@ import {
 
 export default function Dashboard() {
   const [bundlerUrl, setBundlerUrl] = useState("");
+  const [rpcUrl, setRpcUrl] = useState("");
   const [entryPoint, setEntryPoint] = useState("");
   const [factory, setFactory] = useState("");
   const [policyId, setPolicyId] = useState("");
@@ -53,7 +54,7 @@ export default function Dashboard() {
   const [restoreCode, setRestoreCode] = useState<string>("");
   const [restoreFile, setRestoreFile] = useState<string>("");
 
-  const rpc = useMemo(() => bundlerUrl || "", [bundlerUrl]);
+  const rpc = useMemo(() => rpcUrl || bundlerUrl || "", [rpcUrl, bundlerUrl]);
 
   function bytesToBase64(bytes: ArrayBuffer): string {
     const bin = String.fromCharCode(...new Uint8Array(bytes));
@@ -272,6 +273,7 @@ export default function Dashboard() {
       try {
         const DEFAULTS = {
           bundlerUrl: "https://api.pimlico.io/v2/421614/rpc?apikey=pim_kBDzXSD66Uh8PFLaiUhEHZ",
+          rpcUrl: "https://sepolia-rollup.arbitrum.io/rpc",
           entryPoint: "0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108",
           disposableFactory: "0xfFa7a8DB30B46cEb36685b01D766fabE298080c1",
           accountFactory: "0x8a060835a49BaCD214da97B258D5d2FE58545330",
@@ -279,6 +281,7 @@ export default function Dashboard() {
         };
 
         const envBundler = (import.meta as any).env?.VITE_BUNDLER_URL || "";
+        const envRpc = (import.meta as any).env?.VITE_RPC_URL || "";
         const envEntry = (import.meta as any).env?.VITE_ENTRYPOINT || "";
         const envFactory = (import.meta as any).env?.VITE_FACTORY || "";
         const envAccFactory = (import.meta as any).env?.VITE_ACCOUNT_FACTORY || "";
@@ -293,6 +296,7 @@ export default function Dashboard() {
         const ls = (k: string) => localStorage.getItem(k) || "";
 
         setBundlerUrl(ls("bundlerUrl") || serverCfg.bundlerUrl || envBundler || DEFAULTS.bundlerUrl);
+        setRpcUrl(ls("rpcUrl") || serverCfg.rpcUrl || envRpc || DEFAULTS.rpcUrl);
         setEntryPoint(ls("entryPoint") || serverCfg.entryPoint || envEntry || DEFAULTS.entryPoint);
         setFactory(ls("factory") || serverCfg.disposableFactory || serverCfg.factory || envFactory || DEFAULTS.disposableFactory);
         setAccFactory(ls("accFactory") || serverCfg.accountFactory || envAccFactory || DEFAULTS.accountFactory);
@@ -359,9 +363,10 @@ export default function Dashboard() {
   function saveConfig() {
     localStorage.setItem("bundlerUrl", bundlerUrl);
     localStorage.setItem("entryPoint", entryPoint);
-    localStorage.setItem("factory", factory);
-    localStorage.setItem("policyId", policyId);
     localStorage.setItem("accFactory", accFactory);
+    localStorage.setItem("factory", factory);
+    localStorage.setItem("rpcUrl", rpcUrl);
+    localStorage.setItem("policyId", policyId);
   }
 
   function resetToServerConfig() {
@@ -604,12 +609,16 @@ export default function Dashboard() {
                 <Input value={entryPoint} onChange={(e) => setEntryPoint(e.target.value)} placeholder="0x..." />
               </div>
               <div className="space-y-1">
+                <Label>Account Factory Address</Label>
+                <Input value={accFactory} onChange={(e) => setAccFactory(e.target.value)} placeholder="0x..." />
+              </div>
+              <div className="space-y-1">
                 <Label>Disposable Factory Address</Label>
                 <Input value={factory} onChange={(e) => setFactory(e.target.value)} placeholder="0x..." />
               </div>
               <div className="space-y-1">
-                <Label>Account Factory Address</Label>
-                <Input value={accFactory} onChange={(e) => setAccFactory(e.target.value)} placeholder="0x..." />
+                <Label>Chain RPC URL (read-only)</Label>
+                <Input value={rpcUrl} onChange={(e) => setRpcUrl(e.target.value)} placeholder="https://..." />
               </div>
               <div className="space-y-1">
                 <Label>Sponsorship Policy ID</Label>
