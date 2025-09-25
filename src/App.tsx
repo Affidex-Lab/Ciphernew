@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Settings, WalletMinimal } from "lucide-react";
+import { Settings, WalletMinimal, ChevronDown, Bell, Home as HomeIcon, Compass, ActivitySquare } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ethers } from "ethers";
 import {
@@ -20,6 +20,8 @@ import {
   getUserOpReceipt,
   getChainId,
 } from "./lib/aa";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Dashboard() {
   const [bundlerUrl, setBundlerUrl] = useState("");
@@ -35,6 +37,7 @@ export default function Dashboard() {
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("0");
   const [status, setStatus] = useState("");
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
 
   const [ownerPk, setOwnerPk] = useState<string | null>(null);
@@ -43,6 +46,7 @@ export default function Dashboard() {
   const [accountAddr, setAccountAddr] = useState<string | null>(null);
   const [balance, setBalance] = useState<string>("");
   const [chainId, setChainId] = useState<bigint | null>(null);
+  const [usdPrice, setUsdPrice] = useState<number>(0);
 
   type Token = { address: string; symbol: string; name: string; decimals: number; balance: string };
   const [tokens, setTokens] = useState<Token[]>([]);
@@ -68,6 +72,17 @@ export default function Dashboard() {
   const [restoreFile, setRestoreFile] = useState<string>("");
 
   const rpc = useMemo(() => rpcUrl || bundlerUrl || "", [rpcUrl, bundlerUrl]);
+
+  const NETWORKS = [
+    { key: "arbitrum-one", name: "Arbitrum One", chainId: 42161, rpcUrl: "https://arb1.arbitrum.io/rpc", bundlerUrl: "", entryPoint: entryPoint, accountFactory: accFactory, disposableFactory: factory, policyId: policyId, assetId: "ethereum" },
+    { key: "arbitrum-sepolia", name: "Arbitrum Sepolia", chainId: 421614, rpcUrl: "https://sepolia-rollup.arbitrum.io/rpc", bundlerUrl: bundlerUrl, entryPoint: entryPoint, accountFactory: accFactory, disposableFactory: factory, policyId: policyId, assetId: "ethereum" },
+    { key: "ethereum", name: "Ethereum", chainId: 1, rpcUrl: "https://eth.llamarpc.com", bundlerUrl: "", entryPoint: "", accountFactory: "", disposableFactory: "", policyId: "", assetId: "ethereum" },
+    { key: "avalanche", name: "Avalanche", chainId: 43114, rpcUrl: "https://api.avax.network/ext/bc/C/rpc", bundlerUrl: "", entryPoint: "", accountFactory: "", disposableFactory: "", policyId: "", assetId: "avalanche-2" },
+  ];
+  const [activeNetworkKey, setActiveNetworkKey] = useState<string>("arbitrum-sepolia");
+
+  const [accounts, setAccounts] = useState<Array<{ label: string; ownerPk: string; ownerAddr: string; accSalt: string; accountAddr: string | null }>>([]);
+  const [activeAccountIdx, setActiveAccountIdx] = useState<number>(0);
 
   function bytesToBase64(bytes: ArrayBuffer): string {
     const bin = String.fromCharCode(...new Uint8Array(bytes));
@@ -331,6 +346,20 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       try {
+        const id = "ethereum";
+        const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`);
+        if (res.ok) {
+          const j = await res.json();
+          const p = Number(j[id]?.usd) || 0;
+          setUsdPrice(p);
+        }
+      } catch {}
+    })();
+  }, [chainId]);
+
+  useEffect(() => {
+    (async () => {
+      try {
         if (!chainId) return;
         const key = `tokens:${String(chainId)}`;
         const list = JSON.parse(localStorage.getItem(key) || "[]") as string[];
@@ -355,6 +384,9 @@ export default function Dashboard() {
         if (lsAcc && !accountAddr) setAccountAddr(lsAcc);
         if (lsPk && !ownerPk) setOwnerPk(lsPk);
         if (lsOwner && !ownerAddr) setOwnerAddr(lsOwner);
+        const storedAccounts = JSON.parse(localStorage.getItem("accounts") || "[]");
+        if (storedAccounts.length) { setAccounts(storedAccounts); setActiveAccountIdx(Number(localStorage.getItem("accountIdx")||"0")); }
+        else if (lsPk && lsOwner) { setAccounts([{ label: "Account 1", ownerPk: lsPk, ownerAddr: lsOwner, accSalt: localStorage.getItem("accSalt")||"", accountAddr: lsAcc||null }]); setActiveAccountIdx(0); }
       } catch {}
     })();
   }, []);
@@ -398,6 +430,40 @@ export default function Dashboard() {
     localStorage.setItem("factory", factory);
     localStorage.setItem("rpcUrl", rpcUrl);
     localStorage.setItem("policyId", policyId);
+  }
+
+  function selectNetwork(key: string){
+    setActiveNetworkKey(key);
+    const n = NETWORKS.find(x=>x.key===key)!;
+    if (n.rpcUrl) setRpcUrl(n.rpcUrl);
+    if (n.bundlerUrl) setBundlerUrl(n.bundlerUrl);
+    if (n.entryPoint) setEntryPoint(n.entryPoint);
+    if (n.accountFactory) setAccFactory(n.accountFactory);
+    if (n.disposableFactory) setFactory(n.disposableFactory);
+    if (n.policyId) setPolicyId(n.policyId);
+    saveConfig();
+  }
+
+  function createNewAccount(){
+    const w = ethers.Wallet.createRandom();
+    const s = ethers.hexlify(ethers.randomBytes(32));
+    const rec = { label: `Account ${accounts.length+1}`, ownerPk: w.privateKey, ownerAddr: w.address, accSalt: s, accountAddr: null as string | null };
+    const next = [...accounts, rec];
+    setAccounts(next);
+    localStorage.setItem("accounts", JSON.stringify(next));
+    setActiveAccountIdx(next.length-1);
+    setOwnerPk(w.privateKey); setOwnerAddr(w.address); setAccSalt(s); setAccountAddr(null);
+    localStorage.setItem("ownerPk", w.privateKey); localStorage.setItem("ownerAddr", w.address); localStorage.setItem("accSalt", s); localStorage.removeItem("accountAddr");
+  }
+
+  function selectAccount(idx: number){
+    const a = accounts[idx];
+    if (!a) return;
+    setActiveAccountIdx(idx);
+    localStorage.setItem("accountIdx", String(idx));
+    setOwnerPk(a.ownerPk); setOwnerAddr(a.ownerAddr); setAccSalt(a.accSalt); setAccountAddr(a.accountAddr||null);
+    localStorage.setItem("ownerPk", a.ownerPk); localStorage.setItem("ownerAddr", a.ownerAddr); localStorage.setItem("accSalt", a.accSalt);
+    if (a.accountAddr) localStorage.setItem("accountAddr", a.accountAddr); else localStorage.removeItem("accountAddr");
   }
 
   function resetToServerConfig() {
@@ -627,55 +693,83 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-black via-background to-background">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-6">
-        <div className="flex items-center gap-2">
-          <WalletMinimal className="text-primary" />
-          <span className="text-lg font-semibold tracking-tight">Cipher Wallet</span>
+    <div className="min-h-screen w-full bg-gradient-to-b from-black via-background to-background pb-20">
+      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4">
+        <div className="flex items-center gap-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2"><WalletMinimal className="h-4 w-4"/>{NETWORKS.find(n=>n.key===activeNetworkKey)?.name||'Network'}<ChevronDown className="h-4 w-4 opacity-70"/></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuLabel>Networks</DropdownMenuLabel>
+              {NETWORKS.map((n)=> (
+                <DropdownMenuItem key={n.key} onClick={()=>selectNetwork(n.key)}>{n.name}</DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" disabled>Manage networks</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">{accounts[activeAccountIdx]?.label || 'Account'}<ChevronDown className="h-4 w-4 opacity-70"/></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuLabel>Accounts</DropdownMenuLabel>
+              {accounts.map((a, i)=> (
+                <DropdownMenuItem key={i} onClick={()=>selectAccount(i)}>{a.label}</DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={createNewAccount}>Create new account</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button variant="outline" size="sm"><Settings className="mr-2 h-4 w-4"/>Settings</Button>
-          </SheetTrigger>
-          <SheetContent className="w-full sm:max-w-lg">
-            <SheetHeader>
-              <SheetTitle>Configuration</SheetTitle>
-            </SheetHeader>
-            <div className="mt-4 space-y-3">
-              <div className="space-y-1">
-                <Label>Bundler RPC URL</Label>
-                <Input value={bundlerUrl} onChange={(e) => setBundlerUrl(e.target.value)} placeholder="https://..." />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={()=>setNotificationsOpen(v=>!v)}><Bell className="h-4 w-4"/></Button>
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="sm"><Settings className="mr-2 h-4 w-4"/>Settings</Button>
+            </SheetTrigger>
+            <SheetContent className="w-full sm:max-w-lg">
+              <SheetHeader>
+                <SheetTitle>Configuration</SheetTitle>
+              </SheetHeader>
+              <div className="mt-4 space-y-3">
+                <div className="space-y-1">
+                  <Label>Bundler RPC URL</Label>
+                  <Input value={bundlerUrl} onChange={(e) => setBundlerUrl(e.target.value)} placeholder="https://..." />
+                </div>
+                <div className="space-y-1">
+                  <Label>EntryPoint Address</Label>
+                  <Input value={entryPoint} onChange={(e) => setEntryPoint(e.target.value)} placeholder="0x..." />
+                </div>
+                <div className="space-y-1">
+                  <Label>Account Factory Address</Label>
+                  <Input value={accFactory} onChange={(e) => setAccFactory(e.target.value)} placeholder="0x..." />
+                </div>
+                <div className="space-y-1">
+                  <Label>Disposable Factory Address</Label>
+                  <Input value={factory} onChange={(e) => setFactory(e.target.value)} placeholder="0x..." />
+                </div>
+                <div className="space-y-1">
+                  <Label>Chain RPC URL</Label>
+                  <Input value={rpcUrl} onChange={(e) => setRpcUrl(e.target.value)} placeholder="https://..." />
+                </div>
+                <div className="space-y-1">
+                  <Label>Sponsorship Policy ID</Label>
+                  <Input value={policyId} onChange={(e) => setPolicyId(e.target.value)} placeholder="sp_..." />
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button className="flex-1" onClick={saveConfig}>Save</Button>
+                  <Button variant="outline" className="flex-1" onClick={resetToServerConfig}>Reset</Button>
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label>EntryPoint Address</Label>
-                <Input value={entryPoint} onChange={(e) => setEntryPoint(e.target.value)} placeholder="0x..." />
-              </div>
-              <div className="space-y-1">
-                <Label>Account Factory Address</Label>
-                <Input value={accFactory} onChange={(e) => setAccFactory(e.target.value)} placeholder="0x..." />
-              </div>
-              <div className="space-y-1">
-                <Label>Disposable Factory Address</Label>
-                <Input value={factory} onChange={(e) => setFactory(e.target.value)} placeholder="0x..." />
-              </div>
-              <div className="space-y-1">
-                <Label>Chain RPC URL (read-only)</Label>
-                <Input value={rpcUrl} onChange={(e) => setRpcUrl(e.target.value)} placeholder="https://..." />
-              </div>
-              <div className="space-y-1">
-                <Label>Sponsorship Policy ID</Label>
-                <Input value={policyId} onChange={(e) => setPolicyId(e.target.value)} placeholder="sp_..." />
-              </div>
-              <div className="flex gap-2 pt-2">
-                <Button className="flex-1" onClick={saveConfig}>Save</Button>
-                <Button variant="outline" className="flex-1" onClick={resetToServerConfig}>Reset</Button>
-              </div>
-            </div>
-          </SheetContent>
-        </Sheet>
+            </SheetContent>
+          </Sheet>
+        </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col items-center gap-10 px-4 pb-20">
+      <main className="mx-auto flex w-full max-w-6xl flex-col items-center gap-6 px-4 pb-24">
         {!accountAddr && (
           <Card className="w-full text-left">
             <CardHeader><CardTitle>Welcome</CardTitle></CardHeader>
@@ -688,44 +782,61 @@ export default function Dashboard() {
 
         {accountAddr && (
           <>
-            <Card className="w-full max-w-6xl text-left">
-              <CardHeader><CardTitle>Portfolio</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">Account: {accountAddr.slice(0,6)}…{accountAddr.slice(-4)}{ownerAddr? ` · Owner: ${ownerAddr.slice(0,6)}…${ownerAddr.slice(-4)}`: ''}</p>
-                <p className="text-sm">ETH: {balance? `${balance}` : '—'}</p>
-                <div className="space-y-2">
-                  <div className="space-y-1">
-                    {tokens.length === 0 && (<p className="text-xs text-muted-foreground">No tokens yet — common tokens for this network will appear here.</p>)}
-                    {tokens.map(t => (
-                      <div key={t.address} className="flex justify-between text-sm">
-                        <div>{t.symbol} <span className="text-muted-foreground">· {t.name}</span></div>
-                        <div>{t.balance || '0'}</div>
-                      </div>
-                    ))}
-                  </div>
+            <div className="w-full">
+              <div className="flex items-end justify-between">
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Total</div>
+                  <div className="text-4xl font-semibold tracking-tight">US ${((Number(balance||0) * usdPrice) || 0).toFixed(2)}</div>
+                  <div className="text-xs text-muted-foreground">{balance||'0.00'} ETH</div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button onClick={() => { setOpenTransfer(true); setStep(1); }}>Send</Button>
-                  <Button variant="outline" onClick={()=>setOpenReceive(true)}>Receive</Button>
-                  <Button variant="outline" onClick={()=>{
-                    alert('Buy coming soon. Use your favorite on‑ramp to deposit to '+accountAddr);
-                  }}>Buy</Button>
-                </div>
-                <div className="pt-2">
-                  <details>
-                    <summary className="cursor-pointer text-xs text-muted-foreground">Advanced</summary>
-                    <div className="mt-2 flex items-end gap-2">
-                      <div className="flex-1">
-                        <Label>Add custom token (ERC‑20 address)</Label>
-                        <Input value={newTokenAddr} onChange={(e)=>setNewTokenAddr(e.target.value)} placeholder="0x..." />
-                      </div>
-                      <Button onClick={addToken}>Add</Button>
-                      <Button variant="outline" onClick={discoverTokens}>Discover tokens</Button>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button onClick={() => { setOpenTransfer(true); setStep(1); }}>Send</Button>
+                <Button variant="outline" onClick={()=>setOpenReceive(true)}>Receive</Button>
+                <Button variant="outline" onClick={()=> alert('Fund wallet coming soon')}>Fund wallet</Button>
+                <Button variant="outline" onClick={()=> alert('Swap coming soon')}>Swap</Button>
+              </div>
+            </div>
+
+            <Tabs defaultValue="tokens" className="w-full">
+              <TabsList>
+                <TabsTrigger value="tokens">Tokens</TabsTrigger>
+                <TabsTrigger value="defi">DeFi</TabsTrigger>
+                <TabsTrigger value="nfts">NFTs</TabsTrigger>
+              </TabsList>
+              <TabsContent value="tokens" className="mt-2">
+                <Card className="w-full text-left">
+                  <CardContent className="space-y-4 pt-6">
+                    <div className="space-y-1">
+                      {tokens.length === 0 && (<p className="text-xs text-muted-foreground">No tokens yet — common tokens for this network will appear here.</p>)}
+                      {tokens.map(t => (
+                        <div key={t.address} className="flex justify-between text-sm">
+                          <div>{t.symbol} <span className="text-muted-foreground">· {t.name}</span></div>
+                          <div>{t.balance || '0'}</div>
+                        </div>
+                      ))}
                     </div>
-                  </details>
-                </div>
-              </CardContent>
-            </Card>
+                    <details>
+                      <summary className="cursor-pointer text-xs text-muted-foreground">Advanced</summary>
+                      <div className="mt-2 flex items-end gap-2">
+                        <div className="flex-1">
+                          <Label>Add custom token (ERC‑20 address)</Label>
+                          <Input value={newTokenAddr} onChange={(e)=>setNewTokenAddr(e.target.value)} placeholder="0x..." />
+                        </div>
+                        <Button onClick={addToken}>Add</Button>
+                        <Button variant="outline" onClick={discoverTokens}>Discover tokens</Button>
+                      </div>
+                    </details>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              <TabsContent value="defi" className="mt-2">
+                <Card><CardContent className="pt-6 text-sm text-muted-foreground">DeFi coming soon.</CardContent></Card>
+              </TabsContent>
+              <TabsContent value="nfts" className="mt-2">
+                <Card><CardContent className="pt-6 text-sm text-muted-foreground">NFTs coming soon.</CardContent></Card>
+              </TabsContent>
+            </Tabs>
 
             <Card className="w-full max-w-6xl text-left">
               <CardHeader><CardTitle>Recovery</CardTitle></CardHeader>
@@ -833,6 +944,14 @@ export default function Dashboard() {
             </div>
           </DialogContent>
         </Dialog>
+        <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-2">
+            <Button variant="ghost" size="sm" className="flex-1 justify-center gap-2"><HomeIcon className="h-4 w-4"/>Home</Button>
+            <Button variant="ghost" size="sm" className="flex-1 justify-center gap-2"><Compass className="h-4 w-4"/>Browser</Button>
+            <Button variant="ghost" size="sm" className="flex-1 justify-center gap-2"><ActivitySquare className="h-4 w-4"/>Activity</Button>
+            <Button variant="ghost" size="sm" className="flex-1 justify-center gap-2" onClick={()=>document.querySelector('[data-slot=sheet-trigger]')?.dispatchEvent(new Event('click',{bubbles:true}))}><Settings className="h-4 w-4"/>Settings</Button>
+          </div>
+        </nav>
       </main>
     </div>
   );
