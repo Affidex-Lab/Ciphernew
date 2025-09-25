@@ -46,13 +46,15 @@ export default function Dashboard() {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [newTokenAddr, setNewTokenAddr] = useState<string>("");
 
+  type HistoryItem = { time: number; kind: string; details: string; uoHash?: string; txHash?: string; status?: "pending" | "confirmed" | "failed" };
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+
   const [recoveryCode, setRecoveryCode] = useState<string>("");
   const [restoreCode, setRestoreCode] = useState<string>("");
   const [restoreFile, setRestoreFile] = useState<string>("");
 
   const rpc = useMemo(() => bundlerUrl || "", [bundlerUrl]);
 
-  // Helpers: base64 encode/decode for ArrayBuffer
   function bytesToBase64(bytes: ArrayBuffer): string {
     const bin = String.fromCharCode(...new Uint8Array(bytes));
     return btoa(bin);
@@ -63,9 +65,25 @@ export default function Dashboard() {
     for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
     return out;
   }
+  function b64url(bytes: ArrayBuffer | Uint8Array): string {
+    const b64 = bytesToBase64(bytes instanceof Uint8Array ? bytes.buffer : bytes);
+    return b64.replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+  }
+  function fromB64url(s: string): Uint8Array {
+    const pad = s.length % 4 === 2 ? "==" : s.length % 4 === 3 ? "=" : "";
+    const b64 = s.replaceAll("-", "+").replaceAll("_", "/") + pad;
+    return base64ToBytes(b64);
+  }
+  function concatU8(...arrs: Uint8Array[]) {
+    const total = arrs.reduce((n, a) => n + a.length, 0);
+    const out = new Uint8Array(total);
+    let off = 0;
+    for (const a of arrs) { out.set(a, off); off += a.length; }
+    return out;
+  }
 
   function randomCode(): string {
-    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/I/1
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     const arr = new Uint8Array(16);
     crypto.getRandomValues(arr);
     let s = "";
@@ -143,6 +161,112 @@ export default function Dashboard() {
     }
   }
 
+  async function createPasskeyRecoveryKit() {
+    try {
+      if (!ownerPk || !ownerAddr) throw new Error("Create wallet first");
+      if (!("credentials" in navigator)) throw new Error("Passkeys not supported on this device");
+      const rpId = location.hostname;
+      const pubKey: PublicKeyCredentialCreationOptions = {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        rp: { id: rpId, name: "Cipher Wallet" },
+        user: { id: crypto.getRandomValues(new Uint8Array(16)), name: ownerAddr!, displayName: ownerAddr! },
+        pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+        authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required", residentKey: "preferred" },
+        timeout: 60000,
+        attestation: "none",
+      };
+      const cred = (await navigator.credentials.create({ publicKey: pubKey })) as PublicKeyCredential;
+      if (!cred) throw new Error("Passkey creation was cancelled");
+      const credId = new Uint8Array(cred.rawId);
+      const challenge = crypto.getRandomValues(new Uint8Array(32));
+      const assertion = (await navigator.credentials.get({ publicKey: { challenge, allowCredentials: [{ id: credId, type: "public-key", transports: ["internal"] }], userVerification: "required", timeout: 60000 } })) as PublicKeyCredential;
+      const resp = assertion.response as AuthenticatorAssertionResponse;
+      const sig = new Uint8Array(resp.signature);
+      const client = new Uint8Array(resp.clientDataJSON);
+      const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", concatU8(sig, client, challenge)));
+      const key = await crypto.subtle.importKey("raw", digest, { name: "AES-GCM" }, false, ["encrypt"]);
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(JSON.stringify({ ownerPk })));
+      const backup = {
+        version: 2,
+        type: "passkey",
+        rpId,
+        credentialId: b64url(credId),
+        challenge: b64url(challenge),
+        iv: b64url(iv),
+        ciphertext: b64url(new Uint8Array(ct)),
+        address: ownerAddr,
+        createdAt: new Date().toISOString(),
+      };
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `cipher-passkey-recovery-${ownerAddr.slice(2,8)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      alert("Passkey Recovery Kit saved. Keep it and your device passkey safe.");
+    } catch (e: any) {
+      alert(e?.message || String(e));
+    }
+  }
+
+  async function restoreWithPasskey(fileText: string) {
+    try {
+      const obj = JSON.parse(fileText);
+      if (obj.type !== "passkey") throw new Error("Not a passkey recovery file");
+      if (!("credentials" in navigator)) throw new Error("Passkeys not supported on this device");
+      const credId = fromB64url(obj.credentialId);
+      const challenge = fromB64url(obj.challenge);
+      const assertion = (await navigator.credentials.get({ publicKey: { challenge, allowCredentials: [{ id: credId, type: "public-key", transports: ["internal"] }], userVerification: "required", timeout: 60000 } })) as PublicKeyCredential;
+      const resp = assertion.response as AuthenticatorAssertionResponse;
+      const sig = new Uint8Array(resp.signature);
+      const client = new Uint8Array(resp.clientDataJSON);
+      const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", concatU8(sig, client, challenge)));
+      const key = await crypto.subtle.importKey("raw", digest, { name: "AES-GCM" }, false, ["decrypt"]);
+      const iv = fromB64url(obj.iv);
+      const ct = fromB64url(obj.ciphertext);
+      const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
+      const dec = new TextDecoder().decode(pt);
+      const parsed = JSON.parse(dec);
+      const w = new ethers.Wallet(parsed.ownerPk);
+      setOwnerPk(parsed.ownerPk);
+      setOwnerAddr(w.address);
+      localStorage.setItem("ownerPk", parsed.ownerPk);
+      localStorage.setItem("ownerAddr", w.address);
+      alert("Passkey recovery successful.");
+    } catch (e: any) {
+      alert(e?.message || String(e));
+    }
+  }
+
+  function loadHistory() {
+    try { setHistory(JSON.parse(localStorage.getItem("history") || "[]")); } catch { setHistory([]); }
+  }
+  function saveHistory(next: HistoryItem[]) {
+    setHistory(next);
+    localStorage.setItem("history", JSON.stringify(next));
+  }
+  async function updatePendingHistory() {
+    try {
+      const items = JSON.parse(localStorage.getItem("history") || "[]") as HistoryItem[];
+      let changed = false;
+      for (const it of items) {
+        if (it.status === "pending" && it.uoHash) {
+          const rec = await getUserOpReceipt(bundlerUrl, it.uoHash);
+          const tx = rec?.receipt?.transactionHash;
+          if (tx) { it.txHash = tx; it.status = "confirmed"; changed = true; }
+        }
+      }
+      if (changed) saveHistory(items);
+    } catch {}
+  }
+
+  useEffect(() => { loadHistory(); }, []);
+  useEffect(() => { (async()=>{ try{ await updatePendingHistory(); }catch{} })(); }, [bundlerUrl]);
+
   useEffect(() => {
     (async () => {
       try {
@@ -210,19 +334,14 @@ export default function Dashboard() {
         await refreshTokens();
       } catch {}
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rpc, accountAddr, chainId]);
 
   useEffect(() => {
-    // Auto-create flow: /dashboard?autocreate=1
     try {
       const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
       const auto = params.get("autocreate") === "1";
-      if (auto && !accountAddr) {
-        createWallet();
-      }
+      if (auto && !accountAddr) { createWallet(); }
     } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountAddr]);
 
   function saveConfig() {
@@ -291,6 +410,8 @@ export default function Dashboard() {
     setStatus((s) => s + `\nDeploying account ${predicted}...`);
     const uoHash = await sendUserOp(bundlerUrl, userOp, entryPoint);
     setStatus((s) => s + `\nDeploy submitted: ${uoHash}`);
+    const next = [...history, { time: Date.now(), kind: "deploy", details: predicted, uoHash, status: "pending" }];
+    saveHistory(next);
   }
 
   async function createWallet() {
@@ -356,6 +477,9 @@ export default function Dashboard() {
       const uoHash = await sendUserOp(bundlerUrl, userOp, entryPoint);
       setStatus((s) => s + `\nSubmitted: ${uoHash}\nWaiting for receipt...`);
 
+      const recItem: HistoryItem = { time: Date.now(), kind: "disposable", details: `${amount} ETH → ${recipient}`, uoHash, status: "pending" };
+      saveHistory([...history, recItem]);
+
       for (let i = 0; i < 20; i++) {
         await new Promise((r) => setTimeout(r, 1500));
         const rec = await getUserOpReceipt(bundlerUrl, uoHash);
@@ -363,6 +487,9 @@ export default function Dashboard() {
         if (tx) {
           setTxHash(tx);
           setStatus((s) => s + `\nConfirmed: ${tx}`);
+          const next = JSON.parse(localStorage.getItem("history") || "[]") as HistoryItem[];
+          const idx = next.findIndex(h => h.uoHash === uoHash);
+          if (idx >= 0) { next[idx].txHash = tx; next[idx].status = "confirmed"; saveHistory(next); }
           break;
         }
       }
@@ -408,6 +535,26 @@ export default function Dashboard() {
       }
       setNewTokenAddr("");
       await refreshTokens();
+    } catch (e: any) {
+      alert(e?.message || String(e));
+    }
+  }
+
+  async function discoverTokens() {
+    try {
+      if (!rpc || !accountAddr) return;
+      const provider = new ethers.JsonRpcProvider(rpc);
+      const latest = await provider.getBlockNumber();
+      const fromBlock = latest - 120000 > 0 ? latest - 120000 : 0;
+      const topic = ethers.id("Transfer(address,address,uint256)");
+      const toLogs = await provider.getLogs({ fromBlock, toBlock: latest, topics: [topic, null, ethers.hexZeroPad(accountAddr, 32)] });
+      const fromLogs = await provider.getLogs({ fromBlock, toBlock: latest, topics: [topic, ethers.hexZeroPad(accountAddr, 32), null] });
+      const addresses = Array.from(new Set([...toLogs, ...fromLogs].map(l => l.address)));
+      const key = `tokens:${String(chainId||"")}`;
+      const list = JSON.parse(localStorage.getItem(key) || "[]") as string[];
+      let changed = false;
+      for (const addr of addresses) if (!list.includes(addr)) { list.push(addr); changed = true; }
+      if (changed) { localStorage.setItem(key, JSON.stringify(list)); await refreshTokens(); }
     } catch (e: any) {
       alert(e?.message || String(e));
     }
@@ -483,6 +630,7 @@ export default function Dashboard() {
                       <Input value={newTokenAddr} onChange={(e)=>setNewTokenAddr(e.target.value)} placeholder="0x..." />
                     </div>
                     <Button onClick={addToken}>Add</Button>
+                    <Button variant="outline" onClick={discoverTokens}>Discover tokens</Button>
                   </div>
                   <div className="space-y-1">
                     {tokens.length === 0 && (<p className="text-xs text-muted-foreground">No tokens added yet.</p>)}
@@ -503,9 +651,10 @@ export default function Dashboard() {
             <Card className="w-full max-w-6xl text-left">
               <CardHeader><CardTitle>Recovery</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">Replace seed phrases with a simple Recovery Kit. Download an encrypted backup protected by your Recovery Code.</p>
-                <div className="flex items-center gap-2">
+                <p className="text-sm text-muted-foreground">Replace seed phrases with a simple Recovery Kit. Use a Recovery Code or Passkey.</p>
+                <div className="flex flex-wrap items-center gap-2">
                   <Button onClick={createRecoveryBackup}>Create Recovery Kit</Button>
+                  <Button variant="outline" onClick={createPasskeyRecoveryKit}>Create Passkey Kit</Button>
                   {recoveryCode && (
                     <span className="text-xs">Your Recovery Code: <span className="font-mono">{recoveryCode}</span> — store it safely.</span>
                   )}
@@ -523,7 +672,23 @@ export default function Dashboard() {
                     }} />
                   </div>
                 </div>
-                <Button variant="outline" onClick={restoreFromBackup}>Restore Owner Key</Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={restoreFromBackup}>Restore Owner Key</Button>
+                  <Button variant="outline" onClick={async()=>{ if(!restoreFile){ alert('Select a passkey file'); return; } await restoreWithPasskey(restoreFile); }}>Restore with Passkey</Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="w-full max-w-6xl text-left">
+              <CardHeader><CardTitle>History</CardTitle></CardHeader>
+              <CardContent className="space-y-2">
+                {history.length === 0 && (<p className="text-xs text-muted-foreground">No activity yet.</p>)}
+                {history.slice().reverse().map((h, i) => (
+                  <div key={i} className="flex justify-between text-sm">
+                    <div>{new Date(h.time).toLocaleString()} · {h.kind} · {h.details}</div>
+                    <div className="text-muted-foreground">{h.status || '—'}{h.txHash ? ` · ${h.txHash.slice(0,6)}…${h.txHash.slice(-4)}` : ''}</div>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           </>
