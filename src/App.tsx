@@ -4,12 +4,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Settings, Sparkles, WalletMinimal, Link2 } from "lucide-react";
+import { Settings, WalletMinimal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { ethers, BrowserProvider } from "ethers";
-import { encodeExecuteAndBurn, estimateUserOp, getGasPrice, getUserOpHash, packInitCode, predictAccountAddress, sponsorUserOp, sendUserOp, UserOperation, getUserOpReceipt, encodeSelf, dataConfigureGuardiansBySelf, dataSetFrozenBySelf, dataProposeRecoveryBySelf, dataExecuteRecovery, recoveryId, readRecovery, getChainId } from "./lib/aa";
+import { ethers } from "ethers";
+import {
+  encodeExecuteAndBurn,
+  estimateUserOp,
+  getGasPrice,
+  getUserOpHash,
+  packInitCode,
+  predictAccountAddress,
+  sponsorUserOp,
+  sendUserOp,
+  UserOperation,
+  getUserOpReceipt,
+  getChainId,
+} from "./lib/aa";
 
-export default function Home() {
+export default function Dashboard() {
   const [bundlerUrl, setBundlerUrl] = useState("");
   const [entryPoint, setEntryPoint] = useState("");
   const [factory, setFactory] = useState("");
@@ -23,26 +35,113 @@ export default function Home() {
   const [status, setStatus] = useState("");
   const [txHash, setTxHash] = useState<string | null>(null);
 
-  // Seedless account state
   const [ownerPk, setOwnerPk] = useState<string | null>(null);
   const [ownerAddr, setOwnerAddr] = useState<string | null>(null);
   const [accSalt, setAccSalt] = useState<string | null>(null);
   const [accountAddr, setAccountAddr] = useState<string | null>(null);
-  const [g1, setG1] = useState("");
-  const [g2, setG2] = useState("");
-  const [g3, setG3] = useState("");
-  const [newOwner, setNewOwner] = useState("");
-  const [recInfo, setRecInfo] = useState<{start?: bigint, confirms?: bigint, newOwner?: string} | null>(null);
-  const [chainId, setChainId] = useState<bigint | null>(null);
   const [balance, setBalance] = useState<string>("");
+  const [chainId, setChainId] = useState<bigint | null>(null);
+
+  type Token = { address: string; symbol: string; name: string; decimals: number; balance: string };
+  const [tokens, setTokens] = useState<Token[]>([]);
+  const [newTokenAddr, setNewTokenAddr] = useState<string>("");
+
+  const [recoveryCode, setRecoveryCode] = useState<string>("");
+  const [restoreCode, setRestoreCode] = useState<string>("");
+  const [restoreFile, setRestoreFile] = useState<string>("");
 
   const rpc = useMemo(() => bundlerUrl || "", [bundlerUrl]);
 
-  // Guardian approve via link
-  const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : "");
-  const approveMode = params.get('approve') === '1' || params.get('guardian') === '1';
-  const approveAccount = params.get('account') || "";
-  const approveNewOwner = params.get('newOwner') || "";
+  // Helpers: base64 encode/decode for ArrayBuffer
+  function bytesToBase64(bytes: ArrayBuffer): string {
+    const bin = String.fromCharCode(...new Uint8Array(bytes));
+    return btoa(bin);
+  }
+  function base64ToBytes(b64: string): Uint8Array {
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  function randomCode(): string {
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/I/1
+    const arr = new Uint8Array(16);
+    crypto.getRandomValues(arr);
+    let s = "";
+    for (let i = 0; i < arr.length; i++) s += alphabet[arr[i] % alphabet.length];
+    return `${s.slice(0,4)}-${s.slice(4,8)}-${s.slice(8,12)}-${s.slice(12,16)}`;
+  }
+
+  async function deriveKeyFromCode(code: string, salt: Uint8Array) {
+    const enc = new TextEncoder();
+    const raw = await crypto.subtle.importKey("raw", enc.encode(code), { name: "PBKDF2" }, false, ["deriveKey"]);
+    return crypto.subtle.deriveKey(
+      { name: "PBKDF2", salt, iterations: 200_000, hash: "SHA-256" },
+      raw,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+  }
+
+  async function createRecoveryBackup() {
+    try {
+      if (!ownerPk || !ownerAddr) throw new Error("Create wallet first");
+      const code = randomCode();
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const key = await deriveKeyFromCode(code, salt);
+      const enc = new TextEncoder();
+      const data = enc.encode(JSON.stringify({ ownerPk }));
+      const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, data);
+      const backup = {
+        version: 1,
+        kdf: "PBKDF2-HMAC-SHA256",
+        iterations: 200000,
+        algo: "AES-GCM",
+        salt: bytesToBase64(salt.buffer),
+        iv: bytesToBase64(iv.buffer),
+        ciphertext: bytesToBase64(ct),
+        address: ownerAddr,
+        createdAt: new Date().toISOString(),
+      };
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `cipher-recovery-${ownerAddr.slice(2,8)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setRecoveryCode(code);
+    } catch (e: any) {
+      alert(e?.message || String(e));
+    }
+  }
+
+  async function restoreFromBackup() {
+    try {
+      if (!restoreCode || !restoreFile) { alert("Select a backup and enter the code"); return; }
+      const obj = JSON.parse(restoreFile);
+      const salt = base64ToBytes(obj.salt);
+      const iv = base64ToBytes(obj.iv);
+      const key = await deriveKeyFromCode(restoreCode.trim(), salt);
+      const ct = base64ToBytes(obj.ciphertext);
+      const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
+      const dec = new TextDecoder().decode(pt);
+      const parsed = JSON.parse(dec);
+      const w = new ethers.Wallet(parsed.ownerPk);
+      setOwnerPk(parsed.ownerPk);
+      setOwnerAddr(w.address);
+      localStorage.setItem("ownerPk", parsed.ownerPk);
+      localStorage.setItem("ownerAddr", w.address);
+      alert("Recovery successful. Owner key restored.");
+    } catch (e: any) {
+      alert(e?.message || String(e));
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -80,30 +179,51 @@ export default function Home() {
     })();
   }, [rpc]);
 
-  useEffect(()=>{
-    (async()=>{
-      try{
-        // preload from localStorage for returning users
-        const lsAcc = localStorage.getItem('accountAddr');
-        const lsPk = localStorage.getItem('ownerPk');
-        const lsOwner = localStorage.getItem('ownerAddr');
+  useEffect(() => {
+    (async () => {
+      try {
+        const lsAcc = localStorage.getItem("accountAddr");
+        const lsPk = localStorage.getItem("ownerPk");
+        const lsOwner = localStorage.getItem("ownerAddr");
         if (lsAcc && !accountAddr) setAccountAddr(lsAcc);
         if (lsPk && !ownerPk) setOwnerPk(lsPk);
         if (lsOwner && !ownerAddr) setOwnerAddr(lsOwner);
-      }catch{}
+      } catch {}
     })();
-  },[]);
+  }, []);
 
-  useEffect(()=>{
-    (async()=>{
-      try{
+  useEffect(() => {
+    (async () => {
+      try {
         if (!rpc || !accountAddr) { setBalance(""); return; }
         const provider = new ethers.JsonRpcProvider(rpc);
         const bal = await provider.getBalance(accountAddr);
         setBalance(ethers.formatEther(bal));
-      }catch{}
+      } catch {}
     })();
-  },[rpc, accountAddr]);
+  }, [rpc, accountAddr]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!rpc || !accountAddr || !chainId) return;
+        await refreshTokens();
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rpc, accountAddr, chainId]);
+
+  useEffect(() => {
+    // Auto-create flow: /dashboard?autocreate=1
+    try {
+      const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+      const auto = params.get("autocreate") === "1";
+      if (auto && !accountAddr) {
+        createWallet();
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountAddr]);
 
   function saveConfig() {
     localStorage.setItem("bundlerUrl", bundlerUrl);
@@ -126,138 +246,60 @@ export default function Home() {
     const w = ethers.Wallet.createRandom();
     setOwnerPk(w.privateKey);
     setOwnerAddr(w.address);
+    localStorage.setItem("ownerPk", w.privateKey);
+    localStorage.setItem("ownerAddr", w.address);
     const s = ethers.zeroPadValue(ethers.toBeHex(ethers.randomBytes(32)), 32);
     setAccSalt(s);
     return w;
   }
 
   async function deployAccount() {
+    const w = ensureOwner();
+    const salt = accSalt!;
+    const predicted = await predictAccountAddress(rpc, accFactory, entryPoint, w.address, salt);
+    setAccountAddr(predicted);
+    localStorage.setItem("accountAddr", predicted);
+
+    let userOp: UserOperation = {
+      sender: predicted,
+      nonce: 0n,
+      initCode: packInitCode(accFactory, entryPoint, w.address, salt),
+      callData: "0x",
+      callGasLimit: 0n,
+      verificationGasLimit: 0n,
+      preVerificationGas: 0n,
+      maxFeePerGas: 0n,
+      maxPriorityFeePerGas: 0n,
+      paymasterAndData: "0x",
+      signature: "0x",
+    };
+    const est = await estimateUserOp(bundlerUrl, userOp, entryPoint);
+    const gasPrice = await getGasPrice(bundlerUrl);
+    userOp = {
+      ...userOp,
+      callGasLimit: BigInt(est.callGasLimit) + 20000n,
+      verificationGasLimit: BigInt(est.verificationGasLimit) + 20000n,
+      preVerificationGas: BigInt(est.preVerificationGas) + 20000n,
+      maxFeePerGas: gasPrice.maxFeePerGas,
+      maxPriorityFeePerGas: gasPrice.maxPriorityFeePerGas,
+    };
+    const spon = await sponsorUserOp(bundlerUrl, userOp, entryPoint, policyId);
+    userOp.paymasterAndData = spon.paymasterAndData;
+    const uoh = await getUserOpHash(rpc, entryPoint, userOp);
+    const sig = await w.signMessage(ethers.getBytes(uoh));
+    userOp.signature = sig;
+    setStatus((s) => s + `\nDeploying account ${predicted}...`);
+    const uoHash = await sendUserOp(bundlerUrl, userOp, entryPoint);
+    setStatus((s) => s + `\nDeploy submitted: ${uoHash}`);
+  }
+
+  async function createWallet() {
     try {
-      const w = ensureOwner();
-      const salt = accSalt!;
-      const predicted = await predictAccountAddress(rpc, accFactory, entryPoint, w.address, salt);
-      setAccountAddr(predicted);
-
-      let userOp: UserOperation = {
-        sender: predicted,
-        nonce: 0n,
-        initCode: packInitCode(accFactory, entryPoint, w.address, salt),
-        callData: "0x",
-        callGasLimit: 0n,
-        verificationGasLimit: 0n,
-        preVerificationGas: 0n,
-        maxFeePerGas: 0n,
-        maxPriorityFeePerGas: 0n,
-        paymasterAndData: "0x",
-        signature: "0x",
-      };
-      const est = await estimateUserOp(bundlerUrl, userOp, entryPoint);
-      const gasPrice = await getGasPrice(bundlerUrl);
-      userOp = { ...userOp, callGasLimit: BigInt(est.callGasLimit)+20000n, verificationGasLimit: BigInt(est.verificationGasLimit)+20000n, preVerificationGas: BigInt(est.preVerificationGas)+20000n, maxFeePerGas: gasPrice.maxFeePerGas, maxPriorityFeePerGas: gasPrice.maxPriorityFeePerGas };
-      const spon = await sponsorUserOp(bundlerUrl, userOp, entryPoint, policyId);
-      userOp.paymasterAndData = spon.paymasterAndData;
-      const uoh = await getUserOpHash(rpc, entryPoint, userOp);
-      const sig = await w.signMessage(ethers.getBytes(uoh));
-      userOp.signature = sig;
-      setStatus((s)=> s + `\nDeploying account ${predicted}...`);
-      const uoHash = await sendUserOp(bundlerUrl, userOp, entryPoint);
-      setStatus((s)=> s + `\nDeploy submitted: ${uoHash}`);
-    } catch(e:any){ setStatus(`Error: ${e?.message||e}`); }
-  }
-
-  async function setGuardians() {
-    try {
-      if (!accountAddr) throw new Error("Deploy or predict account first");
-      const w = ensureOwner();
-      const data = dataConfigureGuardiansBySelf([g1,g2,g3].filter(Boolean), 2, 48*3600);
-      let userOp: UserOperation = {
-        sender: accountAddr,
-        nonce: 0n,
-        initCode: "0x",
-        callData: encodeSelf(accountAddr, data),
-        callGasLimit: 0n, verificationGasLimit: 0n, preVerificationGas: 0n,
-        maxFeePerGas: 0n, maxPriorityFeePerGas: 0n, paymasterAndData: "0x", signature: "0x"
-      };
-      const est = await estimateUserOp(bundlerUrl, userOp, entryPoint);
-      const gasPrice = await getGasPrice(bundlerUrl);
-      userOp = { ...userOp, callGasLimit: BigInt(est.callGasLimit)+20000n, verificationGasLimit: BigInt(est.verificationGasLimit)+20000n, preVerificationGas: BigInt(est.preVerificationGas)+20000n, maxFeePerGas: gasPrice.maxFeePerGas, maxPriorityFeePerGas: gasPrice.maxPriorityFeePerGas };
-      const spon = await sponsorUserOp(bundlerUrl, userOp, entryPoint, policyId);
-      userOp.paymasterAndData = spon.paymasterAndData;
-      const uoh = await getUserOpHash(rpc, entryPoint, userOp);
-      const sig = await w.signMessage(ethers.getBytes(uoh));
-      userOp.signature = sig;
-      const uoHash = await sendUserOp(bundlerUrl, userOp, entryPoint);
-      setStatus((s)=> s + `\nGuardians configured: ${uoHash}`);
-    } catch(e:any){ setStatus(`Error: ${e?.message||e}`); }
-  }
-
-  async function toggleFreeze(v: boolean){
-    try {
-      if (!accountAddr) throw new Error("Deploy or predict account first");
-      const w = ensureOwner();
-      const data = dataSetFrozenBySelf(v);
-      let userOp: UserOperation = { sender: accountAddr, nonce: 0n, initCode: "0x", callData: encodeSelf(accountAddr, data), callGasLimit: 0n, verificationGasLimit: 0n, preVerificationGas: 0n, maxFeePerGas: 0n, maxPriorityFeePerGas: 0n, paymasterAndData: "0x", signature: "0x" };
-      const est = await estimateUserOp(bundlerUrl, userOp, entryPoint);
-      const gasPrice = await getGasPrice(bundlerUrl);
-      userOp = { ...userOp, callGasLimit: BigInt(est.callGasLimit)+20000n, verificationGasLimit: BigInt(est.verificationGasLimit)+20000n, preVerificationGas: BigInt(est.preVerificationGas)+20000n, maxFeePerGas: gasPrice.maxFeePerGas, maxPriorityFeePerGas: gasPrice.maxPriorityFeePerGas };
-      const spon = await sponsorUserOp(bundlerUrl, userOp, entryPoint, policyId);
-      userOp.paymasterAndData = spon.paymasterAndData;
-      const uoh = await getUserOpHash(rpc, entryPoint, userOp);
-      const sig = await w.signMessage(ethers.getBytes(uoh));
-      userOp.signature = sig;
-      const uoHash = await sendUserOp(bundlerUrl, userOp, entryPoint);
-      setStatus((s)=> s + `\nFreeze ${v?'on':'off'}: ${uoHash}`);
-    } catch(e:any){ setStatus(`Error: ${e?.message||e}`); }
-  }
-
-  async function ownerProposeRecovery(){
-    try{
-      if (!accountAddr || !newOwner) throw new Error("Account/newOwner required");
-      const w = ensureOwner();
-      const data = dataProposeRecoveryBySelf(newOwner);
-      let userOp: UserOperation = { sender: accountAddr, nonce: 0n, initCode: "0x", callData: encodeSelf(accountAddr, data), callGasLimit: 0n, verificationGasLimit: 0n, preVerificationGas: 0n, maxFeePerGas: 0n, maxPriorityFeePerGas: 0n, paymasterAndData: "0x", signature: "0x" };
-      const est = await estimateUserOp(bundlerUrl, userOp, entryPoint);
-      const gasPrice = await getGasPrice(bundlerUrl);
-      userOp = { ...userOp, callGasLimit: BigInt(est.callGasLimit)+20000n, verificationGasLimit: BigInt(est.verificationGasLimit)+20000n, preVerificationGas: BigInt(est.preVerificationGas)+20000n, maxFeePerGas: gasPrice.maxFeePerGas, maxPriorityFeePerGas: gasPrice.maxPriorityFeePerGas };
-      const spon = await sponsorUserOp(bundlerUrl, userOp, entryPoint, policyId);
-      userOp.paymasterAndData = spon.paymasterAndData;
-      const uoh = await getUserOpHash(rpc, entryPoint, userOp);
-      const sig = await w.signMessage(ethers.getBytes(uoh));
-      userOp.signature = sig;
-      const uoHash = await sendUserOp(bundlerUrl, userOp, entryPoint);
-      setStatus((s)=> s + `\nOwner proposed recovery: ${uoHash}`);
-    }catch(e:any){ setStatus(`Error: ${e?.message||e}`); }
-  }
-
-  async function executeRecoveryNow(){
-    try{
-      if (!accountAddr || !newOwner) throw new Error("Account/newOwner required");
-      const w = ensureOwner();
-      const cid = chainId ?? await getChainId(rpc);
-      const id = recoveryId(accountAddr, cid, newOwner);
-      const data = dataExecuteRecovery(id);
-      let userOp: UserOperation = { sender: accountAddr, nonce: 0n, initCode: "0x", callData: encodeSelf(accountAddr, data), callGasLimit: 0n, verificationGasLimit: 0n, preVerificationGas: 0n, maxFeePerGas: 0n, maxPriorityFeePerGas: 0n, paymasterAndData: "0x", signature: "0x" };
-      const est = await estimateUserOp(bundlerUrl, userOp, entryPoint);
-      const gasPrice = await getGasPrice(bundlerUrl);
-      userOp = { ...userOp, callGasLimit: BigInt(est.callGasLimit)+20000n, verificationGasLimit: BigInt(est.verificationGasLimit)+20000n, preVerificationGas: BigInt(est.preVerificationGas)+20000n, maxFeePerGas: gasPrice.maxFeePerGas, maxPriorityFeePerGas: gasPrice.maxPriorityFeePerGas };
-      const spon = await sponsorUserOp(bundlerUrl, userOp, entryPoint, policyId);
-      userOp.paymasterAndData = spon.paymasterAndData;
-      const uoh = await getUserOpHash(rpc, entryPoint, userOp);
-      const sig = await w.signMessage(ethers.getBytes(uoh));
-      userOp.signature = sig;
-      const uoHash = await sendUserOp(bundlerUrl, userOp, entryPoint);
-      setStatus((s)=> s + `\nExecute recovery submitted: ${uoHash}`);
-    }catch(e:any){ setStatus(`Error: ${e?.message||e}`); }
-  }
-
-  async function checkRecovery(){
-    try{
-      if (!accountAddr || !newOwner) throw new Error("Account/newOwner required");
-      const cid = chainId ?? await getChainId(rpc);
-      const id = recoveryId(accountAddr, cid, newOwner);
-      const info = await readRecovery(rpc, accountAddr, id);
-      setRecInfo(info);
-    }catch(e:any){ setStatus(`Error: ${e?.message||e}`); }
+      setStatus("Creating your seedless wallet...");
+      await deployAccount();
+    } catch (e: any) {
+      setStatus(`Error: ${e?.message || e}`);
+    }
   }
 
   async function sendDisposableTx() {
@@ -314,7 +356,6 @@ export default function Home() {
       const uoHash = await sendUserOp(bundlerUrl, userOp, entryPoint);
       setStatus((s) => s + `\nSubmitted: ${uoHash}\nWaiting for receipt...`);
 
-      // Poll for the receipt
       for (let i = 0; i < 20; i++) {
         await new Promise((r) => setTimeout(r, 1500));
         const rec = await getUserOpReceipt(bundlerUrl, uoHash);
@@ -328,6 +369,47 @@ export default function Home() {
       setOpenTransfer(false);
     } catch (e: any) {
       setStatus(`Error: ${e?.message || e}`);
+    }
+  }
+
+  async function refreshTokens() {
+    try {
+      if (!rpc || !accountAddr) return;
+      const provider = new ethers.JsonRpcProvider(rpc);
+      const stored = JSON.parse(localStorage.getItem(`tokens:${String(chainId||"")}`) || "[]") as string[];
+      const next: Token[] = [];
+      for (const addr of stored) {
+        try {
+          const erc20 = new ethers.Contract(addr, [
+            "function name() view returns (string)",
+            "function symbol() view returns (string)",
+            "function decimals() view returns (uint8)",
+            "function balanceOf(address) view returns (uint256)",
+          ], provider);
+          const [name, symbol, decimals, raw] = await Promise.all([
+            erc20.name(), erc20.symbol(), erc20.decimals(), erc20.balanceOf(accountAddr)
+          ]);
+          next.push({ address: addr, name, symbol, decimals, balance: ethers.formatUnits(raw, decimals) });
+        } catch {}
+      }
+      setTokens(next);
+    } catch {}
+  }
+
+  async function addToken() {
+    try {
+      const addr = newTokenAddr.trim();
+      if (!ethers.isAddress(addr)) { alert("Enter a valid token address"); return; }
+      const key = `tokens:${String(chainId||"")}`;
+      const list = JSON.parse(localStorage.getItem(key) || "[]") as string[];
+      if (!list.includes(addr)) {
+        list.push(addr);
+        localStorage.setItem(key, JSON.stringify(list));
+      }
+      setNewTokenAddr("");
+      await refreshTokens();
+    } catch (e: any) {
+      alert(e?.message || String(e));
     }
   }
 
@@ -377,54 +459,74 @@ export default function Home() {
       </header>
 
       <main className="mx-auto flex w-full max-w-6xl flex-col items-center gap-10 px-4 pb-20">
-        {approveMode && (
+        {!accountAddr && (
           <Card className="w-full text-left">
-            <CardHeader><CardTitle>Guardian Approval</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Welcome</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-sm text-muted-foreground">Approve recovery for account {approveAccount.slice(0,6)}…{approveAccount.slice(-4)} to new owner {approveNewOwner.slice(0,6)}…{approveNewOwner.slice(-4)}.</p>
-              <Button onClick={async ()=>{
-                if (!(window as any).ethereum) { alert('Install MetaMask or a wallet'); return; }
-                const provider = new BrowserProvider((window as any).ethereum);
-                await provider.send('wallet_switchEthereumChain', [{ chainId: '0x66EEE' }]).catch(()=>{});
-                const signer = await provider.getSigner();
-                const iface = new ethers.Interface(["function proposeRecovery(address newOwner)"]);
-                const data = iface.encodeFunctionData("proposeRecovery", [approveNewOwner]);
-                const tx = await signer.sendTransaction({ to: approveAccount, data });
-                alert(`Submitted: ${tx.hash}`);
-              }}>Connect wallet and Approve</Button>
+              <p className="text-sm text-muted-foreground">Create your seedless smart wallet in one tap. No seed phrases.</p>
+              <Button onClick={createWallet}>Create Seedless Wallet</Button>
             </CardContent>
           </Card>
-        )}
-        {!accountAddr && (
-          <div className="relative mt-6 rounded-2xl border border-border/50 bg-gradient-to-br from-[#0b1220] to-background p-10 text-center shadow-[0_0_80px_-30px_#1EA7FD]">
-            <div className="mx-auto max-w-3xl space-y-4">
-              <div className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-black/30 px-3 py-1 text-xs text-primary">
-                <Sparkles size={12} />
-                <span>Privacy-first smart wallet</span>
-              </div>
-              <h1 className="text-balance text-4xl font-semibold leading-tight sm:text-5xl md:text-6xl">
-                Go seedless: automatic disposable wallets and one‑time keys for transaction‑level security.
-              </h1>
-              <p className="text-balance text-lg text-muted-foreground">
-                Your funds, not your phrases. Automatic temp wallets and rotating keys.
-              </p>
-            </div>
-          </div>
         )}
 
         {accountAddr && (
-          <Card className="w-full max-w-6xl text-left">
-            <CardHeader><CardTitle>Your Wallet</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-sm text-muted-foreground">Account: {accountAddr.slice(0,6)}…{accountAddr.slice(-4)}{ownerAddr? ` · Owner: ${ownerAddr.slice(0,6)}…${ownerAddr.slice(-4)}`: ''}</p>
-              <p className="text-sm">Balance: {balance? `${balance} ETH` : '—'}</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button onClick={() => { setOpenTransfer(true); setStep(1); }}>One‑time Private Transfer</Button>
-                <Button variant="outline" onClick={()=>toggleFreeze(true)}>Freeze</Button>
-                <Button variant="outline" onClick={()=>toggleFreeze(false)}>Unfreeze</Button>
-              </div>
-            </CardContent>
-          </Card>
+          <>
+            <Card className="w-full max-w-6xl text-left">
+              <CardHeader><CardTitle>Portfolio</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">Account: {accountAddr.slice(0,6)}…{accountAddr.slice(-4)}{ownerAddr? ` · Owner: ${ownerAddr.slice(0,6)}…${ownerAddr.slice(-4)}`: ''}</p>
+                <p className="text-sm">ETH: {balance? `${balance}` : '—'}</p>
+                <div className="space-y-2">
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <Label>Add token (ERC-20 address)</Label>
+                      <Input value={newTokenAddr} onChange={(e)=>setNewTokenAddr(e.target.value)} placeholder="0x..." />
+                    </div>
+                    <Button onClick={addToken}>Add</Button>
+                  </div>
+                  <div className="space-y-1">
+                    {tokens.length === 0 && (<p className="text-xs text-muted-foreground">No tokens added yet.</p>)}
+                    {tokens.map(t => (
+                      <div key={t.address} className="flex justify-between text-sm">
+                        <div>{t.symbol} <span className="text-muted-foreground">· {t.name}</span></div>
+                        <div>{t.balance}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button onClick={() => { setOpenTransfer(true); setStep(1); }}>Transfer</Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="w-full max-w-6xl text-left">
+              <CardHeader><CardTitle>Recovery</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground">Replace seed phrases with a simple Recovery Kit. Download an encrypted backup protected by your Recovery Code.</p>
+                <div className="flex items-center gap-2">
+                  <Button onClick={createRecoveryBackup}>Create Recovery Kit</Button>
+                  {recoveryCode && (
+                    <span className="text-xs">Your Recovery Code: <span className="font-mono">{recoveryCode}</span> — store it safely.</span>
+                  )}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label>Recovery Code</Label>
+                    <Input value={restoreCode} onChange={(e)=>setRestoreCode(e.target.value)} placeholder="XXXX-XXXX-XXXX-XXXX" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Recovery file (.json)</Label>
+                    <Input type="file" accept="application/json" onChange={async (e)=>{
+                      const f = e.target.files?.[0];
+                      if (!f) return; const txt = await f.text(); setRestoreFile(txt);
+                    }} />
+                  </div>
+                </div>
+                <Button variant="outline" onClick={restoreFromBackup}>Restore Owner Key</Button>
+              </CardContent>
+            </Card>
+          </>
         )}
 
         <Card className="w-full max-w-6xl text-left">
@@ -436,80 +538,40 @@ export default function Home() {
             )}
           </CardContent>
         </Card>
-        {accountAddr && (
-        <Card className="w-full max-w-6xl text-left">
-          <CardHeader><CardTitle>Wallet Controls (Guardians & Recovery)</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div><Label>Guardian 1</Label><Input value={g1} onChange={(e)=>setG1(e.target.value)} placeholder="0x..."/></div>
-              <div><Label>Guardian 2</Label><Input value={g2} onChange={(e)=>setG2(e.target.value)} placeholder="0x..."/></div>
-              <div><Label>Guardian 3</Label><Input value={g3} onChange={(e)=>setG3(e.target.value)} placeholder="0x..."/></div>
-            </div>
-            <Button onClick={setGuardians}>Set Guardians (2-of-3, 48h)</Button>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <Label>New Owner (for recovery)</Label>
-                <Input value={newOwner} onChange={(e)=>setNewOwner(e.target.value)} placeholder="0x..."/>
+        <Dialog open={openTransfer} onOpenChange={setOpenTransfer}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{step === 1 ? "New Transfer" : "Review & Send"}</DialogTitle>
+            </DialogHeader>
+            {step === 1 ? (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label>Recipient address</Label>
+                  <Input value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="0x..." />
+                </div>
+                <div className="space-y-1">
+                  <Label>Amount (ETH)</Label>
+                  <Input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+                </div>
+                <div className="flex justify-end">
+                  <Button onClick={() => setStep(2)} disabled={!recipient}>Continue</Button>
+                </div>
               </div>
-              <div className="flex items-end gap-2">
-                <Button onClick={ownerProposeRecovery}>Owner proposes</Button>
-                <Button variant="outline" onClick={checkRecovery}>Check status</Button>
-                <Button variant="outline" onClick={executeRecoveryNow}>Execute</Button>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  This will create a one‑time wallet, send {amount || "0"} ETH to {recipient.slice(0,6)}…{recipient.slice(-4)}, and burn the wallet immediately after.
+                </p>
+                <div className="flex justify-between gap-2">
+                  <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
+                  <Button onClick={sendDisposableTx}>Send</Button>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Label>Guardian approval link</Label>
-              <Button variant="outline" size="sm" onClick={()=>{
-                if (!accountAddr || !newOwner) { alert('Enter new owner first'); return; }
-                const url = `${window.location.origin}/approve?account=${accountAddr}&newOwner=${newOwner}`;
-                navigator.clipboard.writeText(url);
-                alert('Copied: ' + url);
-              }}><Link2 className="mr-2 h-4 w-4"/>Copy</Button>
-            </div>
-            {recInfo && (
-              <p className="text-xs text-muted-foreground">Confirms: {String(recInfo.confirms)} · New owner: {recInfo.newOwner}</p>
             )}
-            <p className="text-xs text-muted-foreground">
-              Guardians must each call <code>proposeRecovery(newOwner)</code> on the account contract to approve. After 48h and 2 approvals, click Execute.
-            </p>
-          </CardContent>
-        </Card>
-        )}
+          </DialogContent>
+        </Dialog>
       </main>
-
-      <Dialog open={openTransfer} onOpenChange={setOpenTransfer}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{step === 1 ? "New Private Transfer" : "Review & Send"}</DialogTitle>
-          </DialogHeader>
-          {step === 1 ? (
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label>Recipient address</Label>
-                <Input value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="0x..." />
-              </div>
-              <div className="space-y-1">
-                <Label>Amount (ETH)</Label>
-                <Input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
-              </div>
-              <div className="flex justify-end">
-                <Button onClick={() => setStep(2)} disabled={!recipient}>Continue</Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                This will create a one‑time wallet, send {amount || "0"} ETH to {recipient.slice(0,6)}…{recipient.slice(-4)}, and burn the wallet immediately after.
-              </p>
-              <div className="flex justify-between gap-2">
-                <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
-                <Button onClick={sendDisposableTx}>Send privately</Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
