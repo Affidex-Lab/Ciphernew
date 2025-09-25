@@ -336,13 +336,17 @@ export default function Dashboard() {
     })();
   }, [rpc, accountAddr, chainId]);
 
+  const configReady = useMemo(() => {
+    try { return Boolean(bundlerUrl && ethers.isAddress(entryPoint) && ethers.isAddress(accFactory)); } catch { return false; }
+  }, [bundlerUrl, entryPoint, accFactory]);
+
   useEffect(() => {
     try {
       const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
       const auto = params.get("autocreate") === "1";
-      if (auto && !accountAddr) { createWallet(); }
+      if (auto && !accountAddr && configReady) { createWallet(); }
     } catch {}
-  }, [accountAddr]);
+  }, [accountAddr, configReady]);
 
   function saveConfig() {
     localStorage.setItem("bundlerUrl", bundlerUrl);
@@ -422,6 +426,7 @@ export default function Dashboard() {
 
   async function createWallet() {
     try {
+      if (!configReady) { setStatus("Config not loaded yet. Please wait a second or open Settings to configure."); return; }
       setStatus("Creating your seedless wallet...");
       await deployAccount();
     } catch (e: any) {
