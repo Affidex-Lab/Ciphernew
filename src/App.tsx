@@ -396,16 +396,27 @@ export default function Dashboard() {
     return { w, salt: s as string };
   }
 
+  async function resolveFactoryAddr() {
+    const provider = new ethers.JsonRpcProvider(rpc);
+    const check = async (addr: string) => (ethers.isAddress(addr) ? await provider.getCode(addr) : "0x");
+    const codeAcc = await check(accFactory);
+    if (codeAcc && codeAcc !== "0x") return accFactory;
+    const codeDisp = await check(factory);
+    if (codeDisp && codeDisp !== "0x") return factory;
+    throw new Error("No valid factory deployed at configured addresses on this chain");
+  }
+
   async function deployAccount() {
     const { w, salt } = ensureOwnerAndSalt();
-    const predicted = await predictAccountAddress(rpc, accFactory, entryPoint, w.address, salt);
+    const useFactory = await resolveFactoryAddr();
+    const predicted = await predictAccountAddress(rpc, useFactory, entryPoint, w.address, salt);
     setAccountAddr(predicted);
     localStorage.setItem("accountAddr", predicted);
 
     let userOp: UserOperation = {
       sender: predicted,
       nonce: 0n,
-      initCode: packInitCode(accFactory, entryPoint, w.address, salt),
+      initCode: packInitCode(useFactory, entryPoint, w.address, salt),
       callData: "0x",
       callGasLimit: 0n,
       verificationGasLimit: 0n,
