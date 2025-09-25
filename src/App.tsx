@@ -1049,16 +1049,20 @@ export default function Dashboard() {
                       <Input value={tokenQuery} onChange={(e)=>setTokenQuery(e.target.value)} placeholder="Search by name or symbol" />
                     </div>
                     <div className="max-h-60 overflow-auto rounded border">
-                      {((tokenIndex[String(NETWORKS.find(n=>n.key===addNetKey)?.chainId || '')] || KNOWN_TOKENS[String(NETWORKS.find(n=>n.key===addNetKey)?.chainId || '')] || [])
-                        .filter(t=> (t.symbol+t.name).toLowerCase().includes(tokenQuery.toLowerCase()))
-                        .slice(0,100)
-                        .map(t=> (
-                          <div key={t.address} className="flex items-center justify-between border-b px-3 py-2 text-sm last:border-b-0">
-                            <div>{t.symbol || 'Token'} <span className="text-muted-foreground">· {t.name || ''}</span></div>
-                            <Button size="sm" onClick={()=>{ const targetCid = NETWORKS.find(n=>n.key===addNetKey)?.chainId; addTokenAddressToList(t.address, targetCid); if (String(targetCid)===String(chainId)) { refreshTokens(); } else { alert('Added to '+ (NETWORKS.find(n=>n.key===addNetKey)?.name||'network') +'. Switch network to view.'); } setOpenAddToken(false); }}>Add</Button>
-                          </div>
-                        ))}
-                      {(((tokenIndex[String(NETWORKS.find(n=>n.key===addNetKey)?.chainId || '')] || KNOWN_TOKENS[String(NETWORKS.find(n=>n.key===addNetKey)?.chainId || '')] || []).length)===0) && (
+                      {(() => {
+                        const cid = String(NETWORKS.find(n=>n.key===addNetKey)?.chainId || '');
+                        const list = (tokenIndex[cid] || KNOWN_TOKENS[cid] || []) as KnownToken[];
+                        return list
+                          .filter(t=> (t.symbol+t.name).toLowerCase().includes(tokenQuery.toLowerCase()))
+                          .slice(0,100)
+                          .map(t=> (
+                            <div key={t.address} className="flex items-center justify-between border-b px-3 py-2 text-sm last:border-b-0">
+                              <div>{t.symbol || 'Token'} <span className="text-muted-foreground">· {t.name || ''}</span></div>
+                              <Button size="sm" onClick={()=>{ const targetCid = NETWORKS.find(n=>n.key===addNetKey)?.chainId; addTokenAddressToList(t.address, targetCid); if (String(targetCid)===String(chainId)) { refreshTokens(); } else { alert('Added to '+ (NETWORKS.find(n=>n.key===addNetKey)?.name||'network') +'. Switch network to view.'); } setOpenAddToken(false); }}>Add</Button>
+                            </div>
+                          ));
+                      })()}
+                      {(() => { const cid = String(NETWORKS.find(n=>n.key===addNetKey)?.chainId || ''); const list = (tokenIndex[cid] || KNOWN_TOKENS[cid] || []) as KnownToken[]; return list.length===0; })() && (
                         <div className="p-3 text-xs text-muted-foreground">No indexed tokens for this network yet.</div>
                       )}
                     </div>
