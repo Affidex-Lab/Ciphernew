@@ -8,18 +8,20 @@ import { useNavigate } from "react-router-dom";
 
 export default function Access(){
   const [bundlerUrl, setBundlerUrl] = useState("");
+  const [rpcUrl, setRpcUrl] = useState("");
   const [accountAddr, setAccountAddr] = useState("");
   const [ownerPk, setOwnerPk] = useState("");
   const [ownerAddr, setOwnerAddr] = useState("");
   const nav = useNavigate();
 
-  const rpc = useMemo(()=> bundlerUrl || "", [bundlerUrl]);
+  const rpc = useMemo(()=> rpcUrl || bundlerUrl || "", [rpcUrl, bundlerUrl]);
 
   useEffect(()=>{
     (async()=>{
       try{
         const DEFAULTS = {
           bundlerUrl: "https://api.pimlico.io/v2/421614/rpc?apikey=pim_kBDzXSD66Uh8PFLaiUhEHZ",
+          rpcUrl: "https://sepolia-rollup.arbitrum.io/rpc",
           entryPoint: "0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108",
           disposableFactory: "0xfFa7a8DB30B46cEb36685b01D766fabE298080c1",
           accountFactory: "0x8a060835a49BaCD214da97B258D5d2FE58545330",
@@ -29,6 +31,7 @@ export default function Access(){
         try{ const res = await fetch('/config.json', { cache: 'no-store' }); if (res.ok) serverCfg = await res.json(); }catch{}
         const ls = (k:string)=> localStorage.getItem(k) || "";
         setBundlerUrl(ls('bundlerUrl') || serverCfg.bundlerUrl || DEFAULTS.bundlerUrl);
+        setRpcUrl(ls('rpcUrl') || serverCfg.rpcUrl || DEFAULTS.rpcUrl);
         const qs = new URLSearchParams(typeof window!== 'undefined' ? window.location.search : "");
         const acc = qs.get('account') || ""; if (acc) setAccountAddr(acc);
       }catch{}
