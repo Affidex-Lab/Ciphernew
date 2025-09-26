@@ -189,14 +189,15 @@ export default function Dashboard() {
       a.remove();
       URL.revokeObjectURL(url);
       setRecoveryCode(code);
+      try { (toast as any)?.success?.('Recovery Kit saved', { description: 'Keep the file safe. Your Recovery Code is shown above.' }); } catch {}
     } catch (e: any) {
-      alert(e?.message || String(e));
+      try { (toast as any)?.error?.('Something went wrong', { description: e?.message || String(e) }); } catch {}
     }
   }
 
   async function restoreFromBackup() {
     try {
-      if (!restoreCode || !restoreFile) { alert("Select a backup and enter the code"); return; }
+      if (!restoreCode || !restoreFile) { try { (toast as any)?.info?.('Select a backup and enter the code'); } catch {} return; }
       const obj = JSON.parse(restoreFile);
       const salt = base64ToBytes(obj.salt);
       const iv = base64ToBytes(obj.iv);
@@ -210,9 +211,9 @@ export default function Dashboard() {
       setOwnerAddr(w.address);
       localStorage.setItem("ownerPk", parsed.ownerPk);
       localStorage.setItem("ownerAddr", w.address);
-      alert("Recovery successful. Owner key restored.");
+      try { (toast as any)?.success?.('Owner key restored'); } catch {}
     } catch (e: any) {
-      alert(e?.message || String(e));
+      try { (toast as any)?.error?.('Something went wrong', { description: e?.message || String(e) }); } catch {}
     }
   }
 
@@ -262,9 +263,9 @@ export default function Dashboard() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      alert("Passkey Recovery Kit saved. Keep it and your device passkey safe.");
+      try { (toast as any)?.success?.('Passkey kit saved', { description: 'Keep it and your device passkey safe.' }); } catch {}
     } catch (e: any) {
-      alert(e?.message || String(e));
+      try { (toast as any)?.error?.('Something went wrong', { description: e?.message || String(e) }); } catch {}
     }
   }
 
@@ -291,9 +292,9 @@ export default function Dashboard() {
       setOwnerAddr(w.address);
       localStorage.setItem("ownerPk", parsed.ownerPk);
       localStorage.setItem("ownerAddr", w.address);
-      alert("Passkey recovery successful.");
+      try { (toast as any)?.success?.('Passkey recovery successful'); } catch {}
     } catch (e: any) {
-      alert(e?.message || String(e));
+      try { (toast as any)?.error?.('Something went wrong', { description: e?.message || String(e) }); } catch {}
     }
   }
 
@@ -748,12 +749,13 @@ export default function Dashboard() {
   async function addToken() {
     try {
       const addr = newTokenAddr.trim();
-      if (!ethers.isAddress(addr)) { alert("Enter a valid token address"); return; }
+      if (!ethers.isAddress(addr)) { try { (toast as any)?.info?.('Enter a valid token address'); } catch {} return; }
       addTokenAddressToList(addr);
+      try { (toast as any)?.success?.('Token added'); } catch {}
       setNewTokenAddr("");
       await refreshTokens();
     } catch (e: any) {
-      alert(e?.message || String(e));
+      try { (toast as any)?.error?.('Something went wrong', { description: e?.message || String(e) }); } catch {}
     }
   }
 
@@ -773,17 +775,17 @@ export default function Dashboard() {
       for (const addr of addresses) if (!list.includes(addr)) { list.push(addr); changed = true; }
       if (changed) { localStorage.setItem(key, JSON.stringify(list)); await refreshTokens(); }
     } catch (e: any) {
-      alert(e?.message || String(e));
+      try { (toast as any)?.error?.('Something went wrong', { description: e?.message || String(e) }); } catch {}
     }
   }
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-black via-background to-background pb-20">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4">
-        <div className="flex items-center gap-3">
+      <header className="mx-auto w-full max-w-6xl px-4 py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2"><WalletMinimal className="h-4 w-4"/>{NETWORKS.find(n=>n.key===activeNetworkKey)?.name||'Network'}<ChevronDown className="h-4 w-4 opacity-70"/></Button>
+              <Button variant="outline" size="sm" className="gap-2 max-w-full sm:max-w-[260px] overflow-hidden"><WalletMinimal className="h-4 w-4"/><span className="truncate">{NETWORKS.find(n=>n.key===activeNetworkKey)?.name||'Network'}</span><ChevronDown className="h-4 w-4 opacity-70"/></Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               <DropdownMenuLabel>Networks</DropdownMenuLabel>
@@ -797,7 +799,7 @@ export default function Dashboard() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">{accounts[activeAccountIdx]?.label || 'Account'}<ChevronDown className="h-4 w-4 opacity-70"/></Button>
+              <Button variant="outline" size="sm" className="gap-2 max-w-full sm:max-w-[200px] overflow-hidden"><span className="truncate">{accounts[activeAccountIdx]?.label || 'Account'}</span><ChevronDown className="h-4 w-4 opacity-70"/></Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               <DropdownMenuLabel>Accounts</DropdownMenuLabel>
@@ -855,7 +857,7 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col items-center gap-6 px-4 pb-24">
+      <main className="mx-auto flex w-full max-w-6xl flex-col items-center gap-6 px-4 pb-28">
         {!accountAddr && (
           <Card className="w-full text-left">
             <CardHeader><CardTitle>Welcome</CardTitle></CardHeader>
@@ -879,13 +881,13 @@ export default function Dashboard() {
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button onClick={() => { setOpenTransfer(true); setStep(1); }}>Send</Button>
                 <Button variant="outline" onClick={()=>setOpenReceive(true)}>Receive</Button>
-                <Button variant="outline" onClick={()=> alert('Fund wallet coming soon')}>Fund wallet</Button>
-                <Button variant="outline" onClick={()=> alert('Swap coming soon')}>Swap</Button>
+                <Button variant="outline" onClick={()=> { try { (toast as any)?.info?.('Funding coming soon'); } catch {} }}>Fund wallet</Button>
+                <Button variant="outline" onClick={()=> { try { (toast as any)?.info?.('Swap coming soon'); } catch {} }}>Swap</Button>
               </div>
             </div>
 
             <Tabs defaultValue="tokens" className="w-full">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <TabsList>
                   <TabsTrigger value="tokens">Tokens</TabsTrigger>
                   <TabsTrigger value="defi">DeFi</TabsTrigger>
@@ -897,15 +899,15 @@ export default function Dashboard() {
                 <Card className="w-full text-left">
                   <CardContent className="space-y-4 pt-6">
                     <div className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <div>ETH <span className="text-muted-foreground">· Ether</span></div>
-                        <div>{balance || '0'}</div>
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <div className="min-w-0 truncate">ETH <span className="text-muted-foreground">· Ether</span></div>
+                        <div className="shrink-0">{balance || '0'}</div>
                       </div>
                       {tokens.length === 0 && (<p className="text-xs text-muted-foreground">No tokens yet — add from “+ Add”.</p>)}
                       {tokens.map(t => (
-                        <div key={t.address} className="flex justify-between text-sm">
-                          <div>{t.symbol} <span className="text-muted-foreground">· {t.name}</span></div>
-                          <div>{t.balance || '0'}</div>
+                        <div key={t.address} className="flex items-center justify-between gap-2 text-sm">
+                          <div className="min-w-0 truncate">{t.symbol} <span className="text-muted-foreground">· {t.name}</span></div>
+                          <div className="shrink-0">{t.balance || '0'}</div>
                         </div>
                       ))}
                     </div>
@@ -929,10 +931,10 @@ export default function Dashboard() {
                   <Button variant="outline" onClick={createPasskeyRecoveryKit}>Create Passkey Kit</Button>
                   <Button variant="outline" onClick={async()=>{
                     try{
-                      if (!lastBackup) { alert('Create a Recovery Kit first'); return; }
+                      if (!lastBackup) { try { (toast as any)?.info?.('Create a Recovery Kit first'); } catch {} return; }
                       const { saveToDriveOrFallback } = await import('./lib/drive');
                       await saveToDriveOrFallback(lastBackup.fileName, lastBackup.blob);
-                    }catch(e:any){ alert('Could not open Drive'); }
+                    }catch(e:any){ try { (toast as any)?.error?.('Could not open Drive'); } catch {} }
                   }}>Save to Google Drive</Button>
                   {recoveryCode && (
                     <span className="text-xs">Your Recovery Code: <span className="font-mono">{recoveryCode}</span> — store it safely.</span>
@@ -953,7 +955,7 @@ export default function Dashboard() {
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={restoreFromBackup}>Restore Owner Key</Button>
-                  <Button variant="outline" onClick={async()=>{ if(!restoreFile){ alert('Select a passkey file'); return; } await restoreWithPasskey(restoreFile); }}>Restore with Passkey</Button>
+                  <Button variant="outline" onClick={async()=>{ if(!restoreFile){ try { (toast as any)?.info?.('Select a passkey file'); } catch {} return; } await restoreWithPasskey(restoreFile); }}>Restore with Passkey</Button>
                 </div>
               </CardContent>
             </Card>
@@ -963,9 +965,9 @@ export default function Dashboard() {
               <CardContent className="space-y-2">
                 {history.length === 0 && (<p className="text-xs text-muted-foreground">No activity yet.</p>)}
                 {history.slice().reverse().map((h, i) => (
-                  <div key={i} className="flex justify-between text-sm">
-                    <div>{new Date(h.time).toLocaleString()} · {h.kind} · {h.details}</div>
-                    <div className="text-muted-foreground">{h.status || '—'}{h.txHash ? ` · ${h.txHash.slice(0,6)}…${h.txHash.slice(-4)}` : ''}</div>
+                  <div key={i} className="flex items-center justify-between gap-2 text-sm">
+                    <div className="min-w-0 truncate">{new Date(h.time).toLocaleString()} · {h.kind} · {h.details}</div>
+                    <div className="shrink-0 text-muted-foreground">{h.status || '—'}{h.txHash ? ` · ${h.txHash.slice(0,6)}…${h.txHash.slice(-4)}` : ''}</div>
                   </div>
                 ))}
               </CardContent>
@@ -1071,9 +1073,9 @@ export default function Dashboard() {
                           .filter(t=> (t.symbol+t.name).toLowerCase().includes(tokenQuery.toLowerCase()))
                           .slice(0,100)
                           .map(t=> (
-                            <div key={t.address} className="flex items-center justify-between border-b px-3 py-2 text-sm last:border-b-0">
-                              <div>{t.symbol || 'Token'} <span className="text-muted-foreground">· {t.name || ''}</span></div>
-                              <Button size="sm" onClick={()=>{ const targetCid = NETWORKS.find(n=>n.key===addNetKey)?.chainId; addTokenAddressToList(t.address, targetCid); if (String(targetCid)===String(chainId)) { refreshTokens(); } else { alert('Added to '+ (NETWORKS.find(n=>n.key===addNetKey)?.name||'network') +'. Switch network to view.'); } setOpenAddToken(false); }}>Add</Button>
+                            <div key={t.address} className="flex items-center justify-between gap-2 border-b px-3 py-2 text-sm last:border-b-0">
+                              <div className="min-w-0 truncate">{t.symbol || 'Token'} <span className="text-muted-foreground">· {t.name || ''}</span></div>
+                              <Button size="sm" onClick={()=>{ const targetCid = NETWORKS.find(n=>n.key===addNetKey)?.chainId; addTokenAddressToList(t.address, targetCid); if (String(targetCid)===String(chainId)) { refreshTokens(); try { (toast as any)?.success?.('Token added'); } catch {} } else { try { (toast as any)?.success?.('Token added to ' + (NETWORKS.find(n=>n.key===addNetKey)?.name||'network'), { description: 'Switch network to view.' }); } catch {} } setOpenAddToken(false); }}>Add</Button>
                             </div>
                           ));
                       })()}

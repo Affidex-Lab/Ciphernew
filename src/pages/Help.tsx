@@ -6,7 +6,7 @@ export default function Help(){
   const nav = useNavigate();
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-black via-background to-background pb-20">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4">
+      <header className="mx-auto w-full max-w-6xl px-4 py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-lg font-semibold tracking-tight">Help & FAQ</div>
         <Button variant="outline" size="sm" onClick={()=>nav('/dashboard')}>Back to Wallet</Button>
       </header>
