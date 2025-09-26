@@ -91,6 +91,7 @@ export default function Dashboard() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
   const [recoveryCode, setRecoveryCode] = useState<string>("");
+  const [lastBackup, setLastBackup] = useState<{ blob: Blob, fileName: string } | null>(null);
   const [restoreCode, setRestoreCode] = useState<string>("");
   const [restoreFile, setRestoreFile] = useState<string>("");
 
@@ -177,10 +178,12 @@ export default function Dashboard() {
         createdAt: new Date().toISOString(),
       };
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+      const fileName = `cipher-recovery-${ownerAddr.slice(2,8)}.json`;
+      setLastBackup({ blob, fileName });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `cipher-recovery-${ownerAddr.slice(2,8)}.json`;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -924,6 +927,13 @@ export default function Dashboard() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Button onClick={createRecoveryBackup}>Create Recovery Kit</Button>
                   <Button variant="outline" onClick={createPasskeyRecoveryKit}>Create Passkey Kit</Button>
+                  <Button variant="outline" onClick={async()=>{
+                    try{
+                      if (!lastBackup) { alert('Create a Recovery Kit first'); return; }
+                      const { saveToDriveOrFallback } = await import('./lib/drive');
+                      await saveToDriveOrFallback(lastBackup.fileName, lastBackup.blob);
+                    }catch(e:any){ alert('Could not open Drive'); }
+                  }}>Save to Google Drive</Button>
                   {recoveryCode && (
                     <span className="text-xs">Your Recovery Code: <span className="font-mono">{recoveryCode}</span> — store it safely.</span>
                   )}
