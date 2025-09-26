@@ -23,6 +23,8 @@ import {
 } from "./lib/aa";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
 
 export default function Dashboard() {
   const [bundlerUrl, setBundlerUrl] = useState("");
@@ -611,6 +613,7 @@ export default function Dashboard() {
       setStatus("Creating your seedless wallet...");
       await deployAccount();
     } catch (e: any) {
+      try { (toast as any)?.error?.("Transfer failed", { description: "Check the address and amount, then try again." }); } catch {}
       setStatus(`Error: ${e?.message || e}`);
     }
   }
@@ -687,6 +690,7 @@ export default function Dashboard() {
       }
       setOpenTransfer(false);
     } catch (e: any) {
+      try { (toast as any)?.error?.("Transfer failed", { description: "Check the address and amount, then try again." }); } catch {}
       setStatus(`Error: ${e?.message || e}`);
     }
   }
@@ -804,6 +808,7 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={()=>setNotificationsOpen(v=>!v)}><Bell className="h-4 w-4"/></Button>
+          <a href="/help" className="hidden sm:inline-flex"><Button variant="outline" size="sm">Help</Button></a>
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="outline" size="sm"><Settings className="mr-2 h-4 w-4"/>Settings</Button>
@@ -1090,6 +1095,7 @@ export default function Dashboard() {
             <Button variant="ghost" size="sm" className="flex-1 justify-center gap-2" onClick={()=>document.querySelector('[data-slot=sheet-trigger]')?.dispatchEvent(new Event('click',{bubbles:true}))}><Settings className="h-4 w-4"/>Settings</Button>
           </div>
         </nav>
+        <Toaster richColors position="top-center" />
       </main>
     </div>
   );
