@@ -813,7 +813,7 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={()=>setNotificationsOpen(v=>!v)}><Bell className="h-4 w-4"/></Button>
-          <a href="/help" className="hidden sm:inline-flex"><Button variant="outline" size="sm">Help</Button></a>
+          <a href="/help" className="inline-flex"><Button variant="outline" size="sm">Help</Button></a>
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="outline" size="sm"><Settings className="mr-2 h-4 w-4"/>Settings</Button>
