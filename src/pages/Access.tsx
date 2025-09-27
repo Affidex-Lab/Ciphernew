@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
+import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
 
 export default function Access(){
   const [bundlerUrl, setBundlerUrl] = useState("");
@@ -39,7 +41,7 @@ export default function Access(){
   },[]);
 
   function load(){
-    if (!ethers.isAddress(accountAddr)) { alert('Enter a valid account address'); return; }
+    if (!ethers.isAddress(accountAddr)) { try { (toast as any)?.error?.('Enter a valid account address'); } catch {} return; }
     localStorage.setItem('accountAddr', accountAddr);
     if (ownerPk){
       try{
@@ -47,14 +49,14 @@ export default function Access(){
         setOwnerAddr(w.address);
         localStorage.setItem('ownerPk', ownerPk);
         localStorage.setItem('ownerAddr', w.address);
-      }catch{ alert('Invalid private key (optional field)'); }
+      }catch{ try { (toast as any)?.error?.('Invalid private key (optional field)'); } catch {} }
     }
     nav('/dashboard');
   }
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-black via-background to-background">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-6">
+      <header className="mx-auto w-full max-w-6xl px-4 py-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <span className="text-lg font-semibold tracking-tight">Cipher Wallet</span>
         </div>
@@ -78,6 +80,7 @@ export default function Access(){
             </div>
           </CardContent>
         </Card>
+        <Toaster richColors position="top-center" />
       </main>
     </div>
   );

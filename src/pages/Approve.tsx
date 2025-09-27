@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { ethers, BrowserProvider } from "ethers";
+import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { useEffect, useState } from "react";
 
 export default function Approve() {
@@ -18,7 +20,7 @@ export default function Approve() {
 
   async function approve() {
     try {
-      if (!(window as any).ethereum) { alert('Install MetaMask or a wallet'); return; }
+      if (!(window as any).ethereum) { try { (toast as any)?.info?.('Install MetaMask or a wallet'); } catch {} return; }
       const provider = new BrowserProvider((window as any).ethereum);
       await provider.send('wallet_switchEthereumChain', [{ chainId: '0x66EEE' }]).catch(()=>{});
       const signer = await provider.getSigner();
@@ -33,7 +35,7 @@ export default function Approve() {
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-black via-background to-background">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-6">
+      <header className="mx-auto w-full max-w-6xl px-4 py-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <span className="text-lg font-semibold tracking-tight">Cipher Wallet</span>
         </div>
@@ -52,12 +54,13 @@ export default function Approve() {
               <Button variant="outline" onClick={()=>{
                 const url = `${window.location.origin}/approve?account=${account}&newOwner=${newOwner}`;
                 navigator.clipboard.writeText(url);
-                alert('Copied: ' + url);
+                try { (toast as any)?.success?.('Approval link copied'); } catch {}
               }}>Copy approval link</Button>
             </div>
             {status && (<p className="text-xs text-muted-foreground">{status}</p>)}
           </CardContent>
         </Card>
+        <Toaster richColors position="top-center" />
       </main>
     </div>
   );
