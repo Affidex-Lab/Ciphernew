@@ -780,7 +780,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-black via-background to-background pb-20">
+    <div className="min-h-screen w-full overflow-x-hidden bg-gradient-to-b from-black via-background to-background pb-20">
       <header className="mx-auto w-full max-w-6xl px-4 py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
           <DropdownMenu>
@@ -811,7 +811,7 @@ export default function Dashboard() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
           <Button variant="outline" size="icon" onClick={()=>setNotificationsOpen(v=>!v)}><Bell className="h-4 w-4"/></Button>
           <a href="/help" className="inline-flex"><Button variant="outline" size="sm">Help</Button></a>
           <Sheet>
