@@ -25,6 +25,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
+import { Web3Wallet } from "@walletconnect/web3wallet";
+import { Core } from "@walletconnect/core";
+import { getSdkError } from "@walletconnect/utils";
 
 export default function Dashboard() {
   const [bundlerUrl, setBundlerUrl] = useState("");
@@ -33,10 +36,12 @@ export default function Dashboard() {
   const [factory, setFactory] = useState("");
   const [policyId, setPolicyId] = useState("");
   const [accFactory, setAccFactory] = useState("");
+  const [wcProjectId, setWcProjectId] = useState("");
 
   const [openTransfer, setOpenTransfer] = useState(false);
   const [openReceive, setOpenReceive] = useState(false);
   const [openDisposable, setOpenDisposable] = useState(false);
+  const [openWc, setOpenWc] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("0");
@@ -44,6 +49,12 @@ export default function Dashboard() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [disposable, setDisposable] = useState<{ address: string; privateKey: string } | null>(null);
+  const [wc, setWc] = useState<any>(null);
+  const [wcUri, setWcUri] = useState("");
+  const [wcProposal, setWcProposal] = useState<any>(null);
+  const [wcSession, setWcSession] = useState<any>(null);
+  const [wcStatus, setWcStatus] = useState<string>("");
+
 
   const [ownerPk, setOwnerPk] = useState<string | null>(null);
   const [ownerAddr, setOwnerAddr] = useState<string | null>(null);
@@ -343,6 +354,7 @@ export default function Dashboard() {
         const envFactory = (import.meta as any).env?.VITE_FACTORY || "";
         const envAccFactory = (import.meta as any).env?.VITE_ACCOUNT_FACTORY || "";
         const envPolicy = (import.meta as any).env?.VITE_SPONSORSHIP_POLICY_ID || "";
+        const envWc = (import.meta as any).env?.VITE_WC_PROJECT_ID || "";
 
         let serverCfg: any = {};
         try {
@@ -358,6 +370,7 @@ export default function Dashboard() {
         setFactory(ls("factory") || serverCfg.disposableFactory || serverCfg.factory || envFactory || DEFAULTS.disposableFactory);
         setAccFactory(ls("accFactory") || serverCfg.accountFactory || envAccFactory || DEFAULTS.accountFactory);
         setPolicyId(ls("policyId") || serverCfg.policyId || envPolicy || DEFAULTS.policyId);
+        setWcProjectId(ls("wcProjectId") || serverCfg.wcProjectId || envWc || "");
       } catch {}
     })();
   }, []);
@@ -498,6 +511,7 @@ export default function Dashboard() {
     localStorage.setItem("factory", factory);
     localStorage.setItem("rpcUrl", rpcUrl);
     localStorage.setItem("policyId", policyId);
+    localStorage.setItem("wcProjectId", wcProjectId);
   }
 
   function selectNetwork(key: string){
@@ -559,6 +573,82 @@ export default function Dashboard() {
       setAccSalt(s);
     }
     return { w, salt: s as string };
+  }
+
+  async function ensureWc(){
+    if (wc) return wc;
+    if (!wcProjectId) { try { (toast as any)?.info?.('Set WalletConnect Project ID in Settings'); } catch {} throw new Error('No WalletConnect projectId'); }
+    const core = new Core({ projectId: wcProjectId });
+    const web3wallet = await Web3Wallet.init({ core, metadata: { name: 'Cipher Wallet', description: 'Seedless wallet with disposable keys', url: window.location.origin, icons: [window.location.origin + '/vite.svg'] } });
+    setWc(web3wallet);
+    setWcStatus('Ready');
+    web3wallet.on('session_proposal', (proposal)=>{ setWcProposal(proposal); setOpenWc(true); });
+    web3wallet.on('session_delete', ()=>{ setWcSession(null); setWcStatus('Disconnected'); });
+    web3wallet.on('session_request', async (event:any)=>{
+      const { topic, id, params } = event;
+      const { request, chainId: reqChain } = params;
+      try{
+        if (!disposable) throw new Error('Create a disposable key first');
+        if (!chainId) throw new Error('Select a network');
+        const sessionChain = `eip155:${String(chainId)}`;
+        if (reqChain && reqChain !== sessionChain) throw new Error('Requested chain not supported');
+        let result:any;
+        if (request.method === 'personal_sign' || request.method === 'eth_sign'){
+          const msg = (request.params?.[0] && request.params?.[0].startsWith('0x')) ? ethers.getBytes(request.params[0]) : new TextEncoder().encode(request.params?.[0] || '');
+          const w = new ethers.Wallet(disposable.privateKey);
+          result = await w.signMessage(msg);
+        } else if (request.method?.startsWith('eth_signTypedData')){
+          // Best-effort: sign the raw payload
+          const w = new ethers.Wallet(disposable.privateKey);
+          const data = request.params?.[1] || request.params?.[0];
+          result = await w.signMessage(typeof data === 'string' ? data : JSON.stringify(data));
+        } else if (request.method === 'eth_sendTransaction'){
+          const tx = request.params?.[0] || {};
+          const provider = new ethers.JsonRpcProvider(rpc);
+          const w = new ethers.Wallet(disposable.privateKey, provider);
+          const resp = await w.sendTransaction({ to: tx.to, data: tx.data, value: tx.value ? BigInt(tx.value) : undefined, gasPrice: tx.gasPrice ? BigInt(tx.gasPrice) : undefined, gasLimit: tx.gas || tx.gasLimit ? BigInt(tx.gas || tx.gasLimit) : undefined });
+          result = resp.hash;
+        } else {
+          throw new Error('Unsupported request: ' + request.method);
+        }
+        await web3wallet.respondSessionRequest({ topic, response: { id, jsonrpc: '2.0', result } });
+      }catch(err:any){
+        await (wc || web3wallet).respondSessionRequest({ topic, response: { id, jsonrpc: '2.0', error: { code: getSdkError('USER_REJECTED').code, message: err?.message || 'Rejected' } } });
+      }
+    });
+    return web3wallet;
+  }
+
+  async function wcPair(){
+    try{
+      const web3wallet = await ensureWc();
+      await web3wallet.core.pairing.pair({ uri: wcUri.trim() });
+      setWcStatus('Pairing…');
+    }catch(e:any){ try { (toast as any)?.error?.('Could not pair', { description: e?.message || String(e) }); } catch {} }
+  }
+
+  async function wcApprove(){
+    try{
+      if (!wcProposal || !disposable || !chainId) return;
+      const web3wallet = await ensureWc();
+      const namespaces:any = { eip155: { accounts: [`eip155:${String(chainId)}:${disposable.address}`], methods: ['eth_sendTransaction','eth_sign','personal_sign','eth_signTypedData','eth_signTypedData_v4'], events: ['accountsChanged','chainChanged'] } };
+      await web3wallet.approveSession({ id: wcProposal.id, namespaces });
+      setWcSession({ topic: wcProposal?.params?.pairingTopic });
+      setWcProposal(null);
+      setWcStatus('Connected');
+      try { (toast as any)?.success?.('WalletConnect session approved'); } catch {}
+    }catch(e:any){ try { (toast as any)?.error?.('Approval failed', { description: e?.message || String(e) }); } catch {} }
+  }
+
+  async function wcReject(){
+    try{ const web3wallet = await ensureWc(); await web3wallet.rejectSession({ id: wcProposal.id, reason: getSdkError('USER_REJECTED') }); setWcProposal(null); }catch{}
+  }
+
+  async function wcDisconnect(){
+    try{ if (!wcSession?.topic && wc?.getActiveSessions){ const sessions = Object.values(wc.getActiveSessions()); if (sessions[0]) wcSession.topic = sessions[0].topic; }
+      if (wcSession?.topic) { await (wc).disconnectSession({ topic: wcSession.topic, reason: getSdkError('USER_DISCONNECTED') }); }
+      setWcSession(null); setWcStatus('Disconnected');
+    }catch{}
   }
 
   async function resolveFactoryAddr() {
@@ -861,6 +951,10 @@ export default function Dashboard() {
                   <Label>Sponsorship Policy ID</Label>
                   <Input value={policyId} onChange={(e) => setPolicyId(e.target.value)} placeholder="sp_..." />
                 </div>
+                <div className="space-y-1">
+                  <Label>WalletConnect Project ID</Label>
+                  <Input value={wcProjectId} onChange={(e)=>setWcProjectId(e.target.value)} placeholder="wc_..." />
+                </div>
                 <div className="flex gap-2 pt-2">
                   <Button className="flex-1" onClick={saveConfig}>Save</Button>
                   <Button variant="outline" className="flex-1" onClick={resetToServerConfig}>Reset</Button>
@@ -898,6 +992,7 @@ export default function Dashboard() {
                 <Button variant="outline" onClick={createDisposableKey}>Disposable Key</Button>
                 <Button variant="outline" onClick={()=> { try { (toast as any)?.info?.('Funding coming soon'); } catch {} }}>Fund wallet</Button>
                 <Button variant="outline" onClick={()=> { try { (toast as any)?.info?.('Swap coming soon'); } catch {} }}>Swap</Button>
+                <Button variant="outline" onClick={()=> setOpenWc(true)}>Connect dApp</Button>
               </div>
             </div>
 
@@ -1143,12 +1238,49 @@ export default function Dashboard() {
           </DialogContent>
         </Dialog>
 
+        <Dialog open={openWc} onOpenChange={setOpenWc}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>WalletConnect</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              {!wcProposal && !wcSession && (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">Paste a WalletConnect URI from the dApp to pair.</p>
+                  <Input value={wcUri} onChange={(e)=>setWcUri(e.target.value)} placeholder="wc:..." />
+                  <div className="flex justify-end">
+                    <Button onClick={wcPair} disabled={!wcUri}>Pair</Button>
+                  </div>
+                </div>
+              )}
+              {wcProposal && (
+                <div className="space-y-3">
+                  <div className="text-sm">Session proposal from <span className="font-medium">{wcProposal?.params?.proposer?.metadata?.name || 'App'}</span></div>
+                  <div className="flex justify-between gap-2">
+                    <Button variant="outline" onClick={wcReject}>Reject</Button>
+                    <Button onClick={wcApprove} disabled={!disposable}>Approve with disposable key</Button>
+                  </div>
+                </div>
+              )}
+              {wcSession && (
+                <div className="space-y-3">
+                  <div className="text-sm">Connected. {wcStatus}</div>
+                  <div className="flex justify-between gap-2">
+                    <Button variant="outline" onClick={()=>setOpenWc(false)}>Close</Button>
+                    <Button variant="destructive" onClick={async()=>{ await wcDisconnect(); endDisposableSession(); try{ (toast as any)?.success?.('Disconnected and key destroyed'); }catch{} }}>Disconnect</Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-2">
-            <Button variant="ghost" size="sm" className="flex-1 justify-center gap-2"><HomeIcon className="h-4 w-4"/>Home</Button>
-            <Button variant="ghost" size="sm" className="flex-1 justify-center gap-2"><Compass className="h-4 w-4"/>Browser</Button>
-            <Button variant="ghost" size="sm" className="flex-1 justify-center gap-2"><ActivitySquare className="h-4 w-4"/>Activity</Button>
-            <Button variant="ghost" size="sm" className="flex-1 justify-center gap-2" onClick={()=>document.querySelector('[data-slot=sheet-trigger]')?.dispatchEvent(new Event('click',{bubbles:true}))}><Settings className="h-4 w-4"/>Settings</Button>
+            <Button aria-label="Home" variant="ghost" size="sm" className="flex-1 justify-center gap-2"><HomeIcon className="h-4 w-4"/>Home</Button>
+            <Button aria-label="Browser" variant="ghost" size="sm" className="flex-1 justify-center gap-2"><Compass className="h-4 w-4"/>Browser</Button>
+            <Button aria-label="Activity" variant="ghost" size="sm" className="flex-1 justify-center gap-2"><ActivitySquare className="h-4 w-4"/>Activity</Button>
+            <Button aria-label="Settings" variant="ghost" size="sm" className="flex-1 justify-center gap-2" onClick={()=>document.querySelector('[data-slot=sheet-trigger]')?.dispatchEvent(new Event('click',{bubbles:true}))}><Settings className="h-4 w-4"/>Settings</Button>
           </div>
         </nav>
         <Toaster richColors position="top-center" />
