@@ -10,6 +10,16 @@
   to = "/index.html"
   status = 200
 
+# Global security headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+    Content-Security-Policy = "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; block-all-mixed-content; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://api.pimlico.io https://sepolia-rollup.arbitrum.io https://arb1.arbitrum.io https://eth.llamarpc.com https://api.coingecko.com https://tokens.uniswap.org https://gateway.ipfs.io https://tokenlist.arbitrum.io blob:"
+
 [[headers]]
   for = "/index.html"
   [headers.values]

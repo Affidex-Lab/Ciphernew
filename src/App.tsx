@@ -36,12 +36,14 @@ export default function Dashboard() {
 
   const [openTransfer, setOpenTransfer] = useState(false);
   const [openReceive, setOpenReceive] = useState(false);
+  const [openDisposable, setOpenDisposable] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("0");
   const [status, setStatus] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [disposable, setDisposable] = useState<{ address: string; privateKey: string } | null>(null);
 
   const [ownerPk, setOwnerPk] = useState<string | null>(null);
   const [ownerAddr, setOwnerAddr] = useState<string | null>(null);
@@ -699,6 +701,18 @@ export default function Dashboard() {
     }
   }
 
+  function createDisposableKey(){
+    const w = ethers.Wallet.createRandom();
+    setDisposable({ address: w.address, privateKey: w.privateKey });
+    setOpenDisposable(true);
+    try { (toast as any)?.success?.('Disposable key created', { description: 'Kept only in memory. End the session to destroy.' }); } catch {}
+  }
+  function endDisposableSession(){
+    setDisposable(null);
+    setOpenDisposable(false);
+    try { (toast as any)?.info?.('Disposable key destroyed'); } catch {}
+  }
+
   async function refreshTokens() {
     try {
       if (!rpc || !accountAddr) return;
@@ -812,7 +826,7 @@ export default function Dashboard() {
           </DropdownMenu>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
-          <Button variant="outline" size="icon" onClick={()=>setNotificationsOpen(v=>!v)}><Bell className="h-4 w-4"/></Button>
+          <Button variant="outline" size="icon" aria-label="Notifications" onClick={()=>setNotificationsOpen(v=>!v)}><Bell className="h-4 w-4"/></Button>
           <a href="/help" className="inline-flex"><Button variant="outline" size="sm">Help</Button></a>
           <Sheet>
             <SheetTrigger asChild>
@@ -881,6 +895,7 @@ export default function Dashboard() {
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button onClick={() => { setOpenTransfer(true); setStep(1); }}>Send</Button>
                 <Button variant="outline" onClick={()=>setOpenReceive(true)}>Receive</Button>
+                <Button variant="outline" onClick={createDisposableKey}>Disposable Key</Button>
                 <Button variant="outline" onClick={()=> { try { (toast as any)?.info?.('Funding coming soon'); } catch {} }}>Fund wallet</Button>
                 <Button variant="outline" onClick={()=> { try { (toast as any)?.info?.('Swap coming soon'); } catch {} }}>Swap</Button>
               </div>
@@ -1099,6 +1114,35 @@ export default function Dashboard() {
             </Tabs>
           </DialogContent>
         </Dialog>
+        <Dialog open={openDisposable} onOpenChange={setOpenDisposable}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Disposable dApp Key</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">Temporary private key for connecting to dApps. It is kept only in memory and will be destroyed when you end the session.</p>
+              <div className="space-y-1">
+                <Label>Address</Label>
+                <div className="flex items-center gap-2">
+                  <Input readOnly value={disposable?.address || ''} />
+                  <Button variant="outline" onClick={()=>{ if(disposable?.address){ navigator.clipboard.writeText(disposable.address); try { (toast as any)?.success?.('Address copied'); } catch {} } }}>Copy</Button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>Private key</Label>
+                <div className="flex items-center gap-2">
+                  <Input readOnly value={disposable?.privateKey || ''} />
+                  <Button variant="outline" onClick={()=>{ if(disposable?.privateKey){ navigator.clipboard.writeText(disposable.privateKey); try { (toast as any)?.success?.('Private key copied'); } catch {} } }}>Copy</Button>
+                </div>
+              </div>
+              <div className="flex justify-between gap-2">
+                <Button variant="outline" onClick={()=>setOpenDisposable(false)}>Close</Button>
+                <Button variant="destructive" onClick={endDisposableSession}>End session</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-2">
             <Button variant="ghost" size="sm" className="flex-1 justify-center gap-2"><HomeIcon className="h-4 w-4"/>Home</Button>
