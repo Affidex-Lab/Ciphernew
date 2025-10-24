@@ -62,7 +62,7 @@ export default function Dashboard() {
   const [wcStatus, setWcStatus] = useState<string>("");
 
   // Stack selector: EVM vs NEAR
-  const [stack, setStack] = useState<"evm" | "near">(() => ((localStorage.getItem("stack") as any) || "near"));
+  const [stack, setStack] = useState<"evm" | "near">(() => ((localStorage.getItem("stack") as any) || "evm"));
   useEffect(() => { localStorage.setItem("stack", stack); }, [stack]);
 
   // EVM states
@@ -914,7 +914,7 @@ export default function Dashboard() {
     } catch {}
   }
 
-  useEffect(() => { (async()=>{ try{ await refreshNearSession(); }catch{} })(); }, []);
+  useEffect(() => { if (stack !== 'near') return; (async()=>{ try{ await refreshNearSession(); }catch{} })(); }, [stack]);
 
   useEffect(() => {
     if (!nearAccountId) return;
