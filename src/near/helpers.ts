@@ -1,7 +1,7 @@
-import { providers, utils } from "near-api-js";
+import { providers, utils, transactions } from "near-api-js";
 import type { NearConfig } from "./types";
 import { getNearConfig } from "./client";
-import { ensureSelector, getActiveNearAccountId } from "./selector";
+import { ensureNearKey, getNearSigner } from "./keyring";
 
 export function formatYoctoToNear(yocto: string): string {
   try { return utils.format.formatNearAmount(yocto, 5); } catch { return "0"; }
@@ -24,10 +24,8 @@ export async function fetchNearBalance(accountId: string): Promise<string> {
 
 export async function getNearPublicKey(accountId: string): Promise<string | null> {
   try {
-    const provider = await getNearProvider();
-    const keys: any = await provider.query({ request_type: "view_access_key_list", finality: "final", account_id: accountId });
-    const k = keys?.keys?.[0]?.public_key || keys?.keys?.[0]?.publicKey || null;
-    return k;
+    const key = await ensureNearKey();
+    return key.publicKey;
   } catch {
     return null;
   }
@@ -38,13 +36,11 @@ export function explorerTxUrl(txHash: string): string {
 }
 
 export async function sendNear(receiverId: string, amountNear: string): Promise<{ txHash: string }>{
-  const s = await ensureSelector();
-  const accId = await getActiveNearAccountId();
-  if (!accId) throw new Error("Connect NEAR wallet first");
-  const wallet = await s.wallet();
+  const { accountId, account } = await getNearSigner();
   const yocto = parseNearToYocto(amountNear);
-  const res = await wallet.signAndSendTransactions({ transactions: [{ signerId: accId, receiverId, actions: [{ type: "Transfer", params: { deposit: yocto } }] }] });
-  const txHash = Array.isArray(res) ? (res[0] as any)?.transaction?.hash || (res[0] as any)?.transaction_outcome?.id || "" : (res as any)?.transaction?.hash || "";
+  const actions = [transactions.transfer(yocto) as any];
+  const res = await account.signAndSendTransaction({ receiverId, actions });
+  const txHash = (res as any)?.transaction_outcome?.id || (res as any)?.transaction?.hash || "";
   return { txHash };
 }
 
