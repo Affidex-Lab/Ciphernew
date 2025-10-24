@@ -67,7 +67,10 @@
     "tailwind-merge": "^3.3.0",
     "tailwindcss": "^4.1.7",
     "vaul": "^1.1.2",
-    "zod": "^3.25.20"
+    "zod": "^3.25.20",
+    "@near-wallet-selector/core": "^8.3.0",
+    "@near-wallet-selector/modal-ui": "^8.3.0",
+    "@near-wallet-selector/my-near-wallet": "^8.3.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250620.0",
