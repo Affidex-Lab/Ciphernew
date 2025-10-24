@@ -3,5 +3,9 @@
   "entryPoint": "0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108",
   "disposableFactory": "0xfFa7a8DB30B46cEb36685b01D766fabE298080c1",
   "accountFactory": "0x8a060835a49BaCD214da97B258D5d2FE58545330",
-  "policyId": "sp_certain_mathemanic"
+  "policyId": "sp_certain_mathemanic",
+  "nearNetwork": "mainnet",
+  "nearNodeUrl": "https://rpc.mainnet.near.org",
+  "nearWalletUrl": "https://app.mynearwallet.com",
+  "nearHelperUrl": "https://helper.mainnet.near.org"
 }

@@ -23,11 +23,17 @@ import {
 } from "./lib/aa";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { Web3Wallet } from "@walletconnect/web3wallet";
 import { Core } from "@walletconnect/core";
 import { getSdkError } from "@walletconnect/utils";
+
+// NEAR imports
+import { openWalletSelector, getActiveNearAccountId, disconnectNear } from "./near/selector";
+import { fetchNearBalance, formatYoctoToNear, getNearPublicKey, sendNear, explorerTxUrl, emitAnalytics } from "./near/helpers";
+import { getNearConfig } from "./near/client";
 
 export default function Dashboard() {
   const [bundlerUrl, setBundlerUrl] = useState("");
@@ -55,7 +61,11 @@ export default function Dashboard() {
   const [wcSession, setWcSession] = useState<any>(null);
   const [wcStatus, setWcStatus] = useState<string>("");
 
+  // Stack selector: EVM vs NEAR
+  const [stack, setStack] = useState<"evm" | "near">(() => ((localStorage.getItem("stack") as any) || "near"));
+  useEffect(() => { localStorage.setItem("stack", stack); }, [stack]);
 
+  // EVM states
   const [ownerPk, setOwnerPk] = useState<string | null>(null);
   const [ownerAddr, setOwnerAddr] = useState<string | null>(null);
   const [accSalt, setAccSalt] = useState<string | null>(null);
@@ -89,13 +99,13 @@ export default function Dashboard() {
   const [tokenIndex, setTokenIndex] = useState<Record<string, KnownToken[]>>({});
   const DEFAULT_TOKEN_ADDRESSES: Record<string, string[]> = {
     "42161": [
-      "0x82af49447d8a07e3bd95bd0d56f35241523fbab1", // WETH
-      "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", // USDC
-      "0xFF970A61A04b1cA14834A43f5de4533ebDDB5CC8", // USDC.e
-      "0xFd086bC7CD5C481DCC9C85ebe478A1C0b69FCbb9", // USDT
-      "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1", // DAI
-      "0x912CE59144191C1204E64559FE8253a0e49E6548", // ARB
-      "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f"  // WBTC
+      "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+      "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+      "0xFF970A61A04b1cA14834A43f5de4533ebDDB5CC8",
+      "0xFd086bC7CD5C481DCC9C85ebe478A1C0b69FCbb9",
+      "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+      "0x912CE59144191C1204E64559FE8253a0e49E6548",
+      "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f"
     ],
     "421614": []
   };
@@ -430,7 +440,7 @@ export default function Dashboard() {
         }
         const byChain: Record<string, KnownToken[]> = {};
         for (const l of lists){
-          const toks = l.tokens || l; // some lists are plain arrays
+          const toks = l.tokens || l;
           if (Array.isArray(toks)){
             for (const t of toks){
               const cid = String(t.chainId || t.chainID || "");
@@ -444,7 +454,6 @@ export default function Dashboard() {
             }
           }
         }
-        // Merge curated defaults
         for (const cid of Object.keys(DEFAULT_TOKEN_ADDRESSES)){
           const cur = byChain[cid] || (byChain[cid]=[]);
           for (const a of DEFAULT_TOKEN_ADDRESSES[cid]){
@@ -598,7 +607,6 @@ export default function Dashboard() {
           const w = new ethers.Wallet(disposable.privateKey);
           result = await w.signMessage(msg);
         } else if (request.method?.startsWith('eth_signTypedData')){
-          // Best-effort: sign the raw payload
           const w = new ethers.Wallet(disposable.privateKey);
           const data = request.params?.[1] || request.params?.[0];
           result = await w.signMessage(typeof data === 'string' ? data : JSON.stringify(data));
@@ -645,7 +653,7 @@ export default function Dashboard() {
   }
 
   async function wcDisconnect(){
-    try{ if (!wcSession?.topic && wc?.getActiveSessions){ const sessions = Object.values(wc.getActiveSessions()); if (sessions[0]) wcSession.topic = sessions[0].topic; }
+    try{ if (!wcSession?.topic && wc?.getActiveSessions){ const sessions = Object.values(wc.getActiveSessions()); if (sessions[0]) wcSession.topic = (sessions[0] as any).topic; }
       if (wcSession?.topic) { await (wc).disconnectSession({ topic: wcSession.topic, reason: getSdkError('USER_DISCONNECTED') }); }
       setWcSession(null); setWcStatus('Disconnected');
     }catch{}
@@ -841,7 +849,7 @@ export default function Dashboard() {
     }
   }
 
-  function addTokenAddressToList(addr: string){
+  function addTokenAddressToListCurrent(addr: string){
     const key = `tokens:${String(chainId||"")}`;
     const list = JSON.parse(localStorage.getItem(key) || "[]") as string[];
     if (!list.includes(addr)) {
@@ -854,7 +862,7 @@ export default function Dashboard() {
     try {
       const addr = newTokenAddr.trim();
       if (!ethers.isAddress(addr)) { try { (toast as any)?.info?.('Enter a valid token address'); } catch {} return; }
-      addTokenAddressToList(addr);
+      addTokenAddressToListCurrent(addr);
       try { (toast as any)?.success?.('Token added'); } catch {}
       setNewTokenAddr("");
       await refreshTokens();
@@ -883,37 +891,112 @@ export default function Dashboard() {
     }
   }
 
+  // NEAR state and effects
+  const [nearAccountId, setNearAccountId] = useState<string | null>(null);
+  const [nearPublicKey, setNearPublicKey] = useState<string | null>(null);
+  const [nearBalance, setNearBalance] = useState<string>("");
+  const [nearTxHash, setNearTxHash] = useState<string | null>(null);
+  const [openNearSend, setOpenNearSend] = useState(false);
+  const [nearReceiver, setNearReceiver] = useState("");
+  const [nearAmount, setNearAmount] = useState("");
+
+  async function refreshNearSession() {
+    try {
+      const acc = await getActiveNearAccountId();
+      setNearAccountId(acc);
+      if (acc) {
+        localStorage.setItem("near:accountId", acc);
+        const bal = await fetchNearBalance(acc);
+        setNearBalance(formatYoctoToNear(bal));
+        const pk = await getNearPublicKey(acc);
+        setNearPublicKey(pk);
+      }
+    } catch {}
+  }
+
+  useEffect(() => { (async()=>{ try{ await refreshNearSession(); }catch{} })(); }, []);
+
+  useEffect(() => {
+    if (!nearAccountId) return;
+    const t = setInterval(async () => {
+      try {
+        const bal = await fetchNearBalance(nearAccountId);
+        setNearBalance(formatYoctoToNear(bal));
+      } catch {}
+    }, 20000);
+    return () => clearInterval(t);
+  }, [nearAccountId]);
+
+  async function handleConnectNear(){
+    try{
+      const cfg = await getNearConfig();
+      await openWalletSelector();
+      setTimeout(async ()=>{ await refreshNearSession(); emitAnalytics('near_connect', { network: cfg.network, accountId: await getActiveNearAccountId() }); }, 400);
+    }catch(e:any){ try { (toast as any)?.error?.('NEAR connect failed', { description: e?.message || String(e) }); } catch {} }
+  }
+
+  async function handleDisconnectNear(){
+    try{ await disconnectNear(); setNearAccountId(null); setNearPublicKey(null); setNearBalance(""); localStorage.removeItem("near:accountId"); }catch{}
+  }
+
+  async function sendNearFlow(){
+    try{
+      setStatus("Preparing NEAR transfer...");
+      const cfg = await getNearConfig();
+      const { txHash } = await sendNear(nearReceiver.trim(), nearAmount.trim());
+      setNearTxHash(txHash || null);
+      emitAnalytics('near_send', { network: cfg.network, accountId: nearAccountId, amount: nearAmount });
+      try { (toast as any)?.success?.('NEAR sent'); } catch {}
+      setOpenNearSend(false);
+    }catch(e:any){ try { (toast as any)?.error?.('NEAR transfer failed', { description: e?.message || String(e) }); } catch {} }
+  }
+
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-gradient-to-b from-black via-background to-background pb-20">
       <header className="mx-auto w-full max-w-6xl px-4 py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2 max-w-full sm:max-w-[260px] overflow-hidden"><WalletMinimal className="h-4 w-4"/><span className="truncate">{NETWORKS.find(n=>n.key===activeNetworkKey)?.name||'Network'}</span><ChevronDown className="h-4 w-4 opacity-70"/></Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuLabel>Networks</DropdownMenuLabel>
-              {NETWORKS.map((n)=> (
-                <DropdownMenuItem key={n.key} onClick={()=>selectNetwork(n.key)}>{n.name}</DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" disabled>Manage networks</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <ToggleGroup type="single" value={stack} onValueChange={(v)=> v && setStack(v as any)} variant="outline" size="sm" className="mr-1">
+            <ToggleGroupItem value="evm">EVM</ToggleGroupItem>
+            <ToggleGroupItem value="near">NEAR</ToggleGroupItem>
+          </ToggleGroup>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2 max-w-full sm:max-w-[200px] overflow-hidden"><span className="truncate">{accounts[activeAccountIdx]?.label || 'Account'}</span><ChevronDown className="h-4 w-4 opacity-70"/></Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuLabel>Accounts</DropdownMenuLabel>
-              {accounts.map((a, i)=> (
-                <DropdownMenuItem key={i} onClick={()=>selectAccount(i)}>{a.label}</DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={createNewAccount}>Create new account</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {stack === 'evm' && (
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2 max-w-full sm:max-w-[260px] overflow-hidden"><WalletMinimal className="h-4 w-4"/><span className="truncate">{NETWORKS.find(n=>n.key===activeNetworkKey)?.name||'Network'}</span><ChevronDown className="h-4 w-4 opacity-70"/></Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuLabel>Networks</DropdownMenuLabel>
+                  {NETWORKS.map((n)=> (
+                    <DropdownMenuItem key={n.key} onClick={()=>selectNetwork(n.key)}>{n.name}</DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem variant="destructive" disabled>Manage networks</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2 max-w-full sm:max-w-[200px] overflow-hidden"><span className="truncate">{accounts[activeAccountIdx]?.label || 'Account'}</span><ChevronDown className="h-4 w-4 opacity-70"/></Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuLabel>Accounts</DropdownMenuLabel>
+                  {accounts.map((a, i)=> (
+                    <DropdownMenuItem key={i} onClick={()=>selectAccount(i)}>{a.label}</DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={createNewAccount}>Create new account</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
+
+          {stack === 'near' && (
+            <div className="text-sm text-muted-foreground">
+              NEAR Mainnet
+            </div>
+          )}
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
           <Button variant="outline" size="icon" aria-label="Notifications" onClick={()=>setNotificationsOpen(v=>!v)}><Bell className="h-4 w-4"/></Button>
@@ -966,122 +1049,196 @@ export default function Dashboard() {
       </header>
 
       <main className="mx-auto flex w-full max-w-6xl flex-col items-center gap-6 px-4 pb-28">
-        {!accountAddr && (
-          <Card className="w-full text-left">
-            <CardHeader><CardTitle>Welcome</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-sm text-muted-foreground">Create your seedless smart wallet in one tap. No seed phrases.</p>
-              <Button onClick={createWallet}>Create Seedless Wallet</Button>
-            </CardContent>
-          </Card>
+
+        {stack === 'near' && (
+          <>
+            {!nearAccountId && (
+              <Card className="w-full text-left">
+                <CardHeader><CardTitle>NEAR</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-muted-foreground">Connect your NEAR account or create a new one.</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={handleConnectNear}>Connect NEAR Wallet</Button>
+                    <Button variant="outline" onClick={async()=>{ const cfg = await getNearConfig(); window.open(`${cfg.walletUrl}/create`, '_blank'); }}>Create NEAR Account</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {nearAccountId && (
+              <>
+                <div className="w-full">
+                  <div className="flex items-end justify-between">
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">NEAR Balance</div>
+                      <div className="text-4xl font-semibold tracking-tight">{nearBalance || '0.00'} Ⓝ</div>
+                      <div className="text-xs text-muted-foreground">{nearAccountId}</div>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button onClick={()=> setOpenNearSend(true)}>Send NEAR</Button>
+                    <Button variant="outline" onClick={()=>{ navigator.clipboard.writeText(nearAccountId); try { (toast as any)?.success?.('Account copied'); } catch {} }}>Copy Account</Button>
+                    <Button variant="outline" onClick={handleDisconnectNear}>Disconnect</Button>
+                  </div>
+                </div>
+
+                <Card className="w-full text-left">
+                  <CardHeader><CardTitle>Details</CardTitle></CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between gap-2"><div className="text-muted-foreground">Account</div><div className="truncate">{nearAccountId}</div></div>
+                    <div className="flex items-center justify-between gap-2"><div className="text-muted-foreground">Public key</div><div className="truncate">{nearPublicKey || '—'}</div></div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            <Dialog open={openNearSend} onOpenChange={setOpenNearSend}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Send NEAR</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label>Receiver (accountId)</Label>
+                    <Input value={nearReceiver} onChange={(e)=>setNearReceiver(e.target.value)} placeholder="alice.near" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Amount (NEAR)</Label>
+                    <Input value={nearAmount} onChange={(e)=>setNearAmount(e.target.value)} placeholder="0.00" />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={()=>setOpenNearSend(false)}>Cancel</Button>
+                    <Button onClick={sendNearFlow} disabled={!nearReceiver || !nearAmount}>Send</Button>
+                  </div>
+                  {nearTxHash && (
+                    <a className="text-primary underline text-sm" href={explorerTxUrl(nearTxHash)} target="_blank" rel="noreferrer">View on NEAR Explorer ↗</a>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+          </>
         )}
 
-        {accountAddr && (
+        {stack === 'evm' && (
           <>
-            <div className="w-full">
-              <div className="flex items-end justify-between">
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Total</div>
-                  <div className="text-4xl font-semibold tracking-tight">US ${((Number(balance||0) * usdPrice) || 0).toFixed(2)}</div>
-                  <div className="text-xs text-muted-foreground">{balance||'0.00'} ETH</div>
-                </div>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button onClick={() => { setOpenTransfer(true); setStep(1); }}>Send</Button>
-                <Button variant="outline" onClick={()=>setOpenReceive(true)}>Receive</Button>
-                <Button variant="outline" onClick={createDisposableKey}>Disposable Key</Button>
-                <Button variant="outline" onClick={()=> { try { (toast as any)?.info?.('Funding coming soon'); } catch {} }}>Fund wallet</Button>
-                <Button variant="outline" onClick={()=> { try { (toast as any)?.info?.('Swap coming soon'); } catch {} }}>Swap</Button>
-                <Button variant="outline" onClick={()=> setOpenWc(true)}>Connect dApp</Button>
-              </div>
-            </div>
+            {!accountAddr && (
+              <Card className="w-full text-left">
+                <CardHeader><CardTitle>Welcome</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-muted-foreground">Create your seedless smart wallet in one tap. No seed phrases.</p>
+                  <Button onClick={createWallet}>Create Seedless Wallet</Button>
+                </CardContent>
+              </Card>
+            )}
 
-            <Tabs defaultValue="tokens" className="w-full">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <TabsList>
-                  <TabsTrigger value="tokens">Tokens</TabsTrigger>
-                  <TabsTrigger value="defi">DeFi</TabsTrigger>
-                  <TabsTrigger value="nfts">NFTs</TabsTrigger>
-                </TabsList>
-                <Button variant="outline" size="sm" onClick={()=>{ setAddMode("search"); setAddNetKey(activeNetworkKey); setOpenAddToken(true); }}>+ Add</Button>
-              </div>
-              <TabsContent value="tokens" className="mt-2">
-                <Card className="w-full text-left">
-                  <CardContent className="space-y-4 pt-6">
+            {accountAddr && (
+              <>
+                <div className="w-full">
+                  <div className="flex items-end justify-between">
                     <div className="space-y-1">
-                      <div className="flex items-center justify-between gap-2 text-sm">
-                        <div className="min-w-0 truncate">ETH <span className="text-muted-foreground">· Ether</span></div>
-                        <div className="shrink-0">{balance || '0'}</div>
-                      </div>
-                      {tokens.length === 0 && (<p className="text-xs text-muted-foreground">No tokens yet — add from “+ Add”.</p>)}
-                      {tokens.map(t => (
-                        <div key={t.address} className="flex items-center justify-between gap-2 text-sm">
-                          <div className="min-w-0 truncate">{t.symbol} <span className="text-muted-foreground">· {t.name}</span></div>
-                          <div className="shrink-0">{t.balance || '0'}</div>
+                      <div className="text-xs text-muted-foreground">Total</div>
+                      <div className="text-4xl font-semibold tracking-tight">US ${((Number(balance||0) * usdPrice) || 0).toFixed(2)}</div>
+                      <div className="text-xs text-muted-foreground">{balance||'0.00'} ETH</div>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button onClick={() => { setOpenTransfer(true); setStep(1); }}>Send</Button>
+                    <Button variant="outline" onClick={()=>setOpenReceive(true)}>Receive</Button>
+                    <Button variant="outline" onClick={createDisposableKey}>Disposable Key</Button>
+                    <Button variant="outline" onClick={()=> { try { (toast as any)?.info?.('Funding coming soon'); } catch {} }}>Fund wallet</Button>
+                    <Button variant="outline" onClick={()=> { try { (toast as any)?.info?.('Swap coming soon'); } catch {} }}>Swap</Button>
+                    <Button variant="outline" onClick={()=> setOpenWc(true)}>Connect dApp</Button>
+                  </div>
+                </div>
+
+                <Tabs defaultValue="tokens" className="w-full">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <TabsList>
+                      <TabsTrigger value="tokens">Tokens</TabsTrigger>
+                      <TabsTrigger value="defi">DeFi</TabsTrigger>
+                      <TabsTrigger value="nfts">NFTs</TabsTrigger>
+                    </TabsList>
+                    <Button variant="outline" size="sm" onClick={()=>{ setAddMode("search"); setAddNetKey(activeNetworkKey); setOpenAddToken(true); }}>+ Add</Button>
+                  </div>
+                  <TabsContent value="tokens" className="mt-2">
+                    <Card className="w-full text-left">
+                      <CardContent className="space-y-4 pt-6">
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <div className="min-w-0 truncate">ETH <span className="text-muted-foreground">· Ether</span></div>
+                            <div className="shrink-0">{balance || '0'}</div>
+                          </div>
+                          {tokens.length === 0 && (<p className="text-xs text-muted-foreground">No tokens yet — add from “+ Add”.</p>)}
+                          {tokens.map(t => (
+                            <div key={t.address} className="flex items-center justify-between gap-2 text-sm">
+                              <div className="min-w-0 truncate">{t.symbol} <span className="text-muted-foreground">· {t.name}</span></div>
+                              <div className="shrink-0">{t.balance || '0'}</div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                  <TabsContent value="defi" className="mt-2">
+                    <Card><CardContent className="pt-6 text-sm text-muted-foreground">DeFi coming soon.</CardContent></Card>
+                  </TabsContent>
+                  <TabsContent value="nfts" className="mt-2">
+                    <Card><CardContent className="pt-6 text-sm text-muted-foreground">NFTs coming soon.</CardContent></Card>
+                  </TabsContent>
+                </Tabs>
+
+                <Card className="w-full max-w-6xl text-left">
+                  <CardHeader><CardTitle>Recovery</CardTitle></CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-sm text-muted-foreground">Replace seed phrases with a simple Recovery Kit. Use a Recovery Code or Passkey.</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button onClick={createRecoveryBackup}>Create Recovery Kit</Button>
+                      <Button variant="outline" onClick={createPasskeyRecoveryKit}>Create Passkey Kit</Button>
+                      <Button variant="outline" onClick={async()=>{
+                        try{
+                          if (!lastBackup) { try { (toast as any)?.info?.('Create a Recovery Kit first'); } catch {} return; }
+                          const { saveToDriveOrFallback } = await import('./lib/drive');
+                          await saveToDriveOrFallback(lastBackup.fileName, lastBackup.blob);
+                        }catch(e:any){ try { (toast as any)?.error?.('Could not open Drive'); } catch {} }
+                      }}>Save to Google Drive</Button>
+                      {recoveryCode && (
+                        <span className="text-xs">Your Recovery Code: <span className="font-mono">{recoveryCode}</span> — store it safely.</span>
+                      )}
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label>Recovery Code</Label>
+                        <Input value={restoreCode} onChange={(e)=>setRestoreCode(e.target.value)} placeholder="XXXX-XXXX-XXXX-XXXX" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Recovery file (.json)</Label>
+                        <Input type="file" accept="application/json" onChange={async (e)=>{
+                          const f = e.target.files?.[0];
+                          if (!f) return; const txt = await f.text(); setRestoreFile(txt);
+                        }} />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={restoreFromBackup}>Restore Owner Key</Button>
+                      <Button variant="outline" onClick={async()=>{ if(!restoreFile){ try { (toast as any)?.info?.('Select a passkey file'); } catch {} return; } await restoreWithPasskey(restoreFile); }}>Restore with Passkey</Button>
                     </div>
                   </CardContent>
                 </Card>
-              </TabsContent>
-              <TabsContent value="defi" className="mt-2">
-                <Card><CardContent className="pt-6 text-sm text-muted-foreground">DeFi coming soon.</CardContent></Card>
-              </TabsContent>
-              <TabsContent value="nfts" className="mt-2">
-                <Card><CardContent className="pt-6 text-sm text-muted-foreground">NFTs coming soon.</CardContent></Card>
-              </TabsContent>
-            </Tabs>
 
-            <Card className="w-full max-w-6xl text-left">
-              <CardHeader><CardTitle>Recovery</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">Replace seed phrases with a simple Recovery Kit. Use a Recovery Code or Passkey.</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button onClick={createRecoveryBackup}>Create Recovery Kit</Button>
-                  <Button variant="outline" onClick={createPasskeyRecoveryKit}>Create Passkey Kit</Button>
-                  <Button variant="outline" onClick={async()=>{
-                    try{
-                      if (!lastBackup) { try { (toast as any)?.info?.('Create a Recovery Kit first'); } catch {} return; }
-                      const { saveToDriveOrFallback } = await import('./lib/drive');
-                      await saveToDriveOrFallback(lastBackup.fileName, lastBackup.blob);
-                    }catch(e:any){ try { (toast as any)?.error?.('Could not open Drive'); } catch {} }
-                  }}>Save to Google Drive</Button>
-                  {recoveryCode && (
-                    <span className="text-xs">Your Recovery Code: <span className="font-mono">{recoveryCode}</span> — store it safely.</span>
-                  )}
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label>Recovery Code</Label>
-                    <Input value={restoreCode} onChange={(e)=>setRestoreCode(e.target.value)} placeholder="XXXX-XXXX-XXXX-XXXX" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Recovery file (.json)</Label>
-                    <Input type="file" accept="application/json" onChange={async (e)=>{
-                      const f = e.target.files?.[0];
-                      if (!f) return; const txt = await f.text(); setRestoreFile(txt);
-                    }} />
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={restoreFromBackup}>Restore Owner Key</Button>
-                  <Button variant="outline" onClick={async()=>{ if(!restoreFile){ try { (toast as any)?.info?.('Select a passkey file'); } catch {} return; } await restoreWithPasskey(restoreFile); }}>Restore with Passkey</Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="w-full max-w-6xl text-left">
-              <CardHeader><CardTitle>History</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                {history.length === 0 && (<p className="text-xs text-muted-foreground">No activity yet.</p>)}
-                {history.slice().reverse().map((h, i) => (
-                  <div key={i} className="flex items-center justify-between gap-2 text-sm">
-                    <div className="min-w-0 truncate">{new Date(h.time).toLocaleString()} · {h.kind} · {h.details}</div>
-                    <div className="shrink-0 text-muted-foreground">{h.status || '—'}{h.txHash ? ` · ${h.txHash.slice(0,6)}…${h.txHash.slice(-4)}` : ''}</div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+                <Card className="w-full max-w-6xl text-left">
+                  <CardHeader><CardTitle>History</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    {history.length === 0 && (<p className="text-xs text-muted-foreground">No activity yet.</p>)}
+                    {history.slice().reverse().map((h, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 text-sm">
+                        <div className="min-w-0 truncate">{new Date(h.time).toLocaleString()} · {h.kind} · {h.details}</div>
+                        <div className="shrink-0 text-muted-foreground">{h.status || '—'}{h.txHash ? ` · ${h.txHash.slice(0,6)}…${h.txHash.slice(-4)}` : ''}</div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </>
         )}
 
@@ -1091,6 +1248,9 @@ export default function Dashboard() {
             <pre className="whitespace-pre-wrap text-xs text-muted-foreground">{status || 'Ready.'}</pre>
             {txHash && (
               <a className="text-primary underline" href={`https://sepolia.arbiscan.io/tx/${txHash}`} target="_blank" rel="noreferrer">View on Arbiscan ↗</a>
+            )}
+            {nearTxHash && (
+              <a className="text-primary underline" href={nearTxHash ? explorerTxUrl(nearTxHash) : '#'} target="_blank" rel="noreferrer">View on NEAR Explorer ↗</a>
             )}
           </CardContent>
         </Card>

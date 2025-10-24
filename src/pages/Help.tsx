@@ -38,6 +38,24 @@ export default function Help(){
         </Card>
 
         <Card>
+          <CardHeader><CardTitle>NEAR</CardTitle></CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-2">
+            <div>
+              <div className="font-medium text-foreground">Switch to NEAR</div>
+              In the header, toggle to NEAR. Tap “Connect NEAR Wallet” to select a wallet (e.g. MyNearWallet). You can also create a new NEAR account.
+            </div>
+            <div>
+              <div className="font-medium text-foreground">View balance</div>
+              Once connected, your accountId, public key, and NEAR balance will display. The balance auto‑updates every 20 seconds.
+            </div>
+            <div>
+              <div className="font-medium text-foreground">Send NEAR</div>
+              Open “Send NEAR”, enter a receiver accountId and amount in NEAR, then confirm in your wallet. You’ll see the transaction hash with a link to NEAR Explorer.
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
           <CardHeader><CardTitle>Recovery</CardTitle></CardHeader>
           <CardContent className="text-sm text-muted-foreground space-y-2">
             <div>
