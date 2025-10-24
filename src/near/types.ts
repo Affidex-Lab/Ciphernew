@@ -11,4 +11,6 @@ export type NearConfig = {
   walletUrl: string;
   helperUrl: string;
   explorerUrl: string;
+  nearDefaultTokens?: string[];
+  nearDefaultNfts?: string[];
 };

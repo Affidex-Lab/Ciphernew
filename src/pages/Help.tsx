@@ -41,16 +41,16 @@ export default function Help(){
           <CardHeader><CardTitle>NEAR</CardTitle></CardHeader>
           <CardContent className="text-sm text-muted-foreground space-y-2">
             <div>
-              <div className="font-medium text-foreground">Switch to NEAR</div>
-              In the header, toggle to NEAR. Tap “Connect NEAR Wallet” to select a wallet (e.g. MyNearWallet). You can also create a new NEAR account.
+              <div className="font-medium text-foreground">Seedless implicit account</div>
+              Toggle to NEAR. Your implicit account ID is created locally and shown immediately—no external wallet is needed. Fund this account to activate it on‑chain.
             </div>
             <div>
               <div className="font-medium text-foreground">View balance</div>
-              Once connected, your accountId, public key, and NEAR balance will display. The balance auto‑updates every 20 seconds.
+              Your accountId, public key, and NEAR balance display automatically. The balance auto‑updates every 20 seconds.
             </div>
             <div>
               <div className="font-medium text-foreground">Send NEAR</div>
-              Open “Send NEAR”, enter a receiver accountId and amount in NEAR, then confirm in your wallet. You’ll see the transaction hash with a link to NEAR Explorer.
+              Open “Send NEAR”, enter a receiver accountId and amount in NEAR. Sending is enabled once your implicit account is funded. You’ll see the transaction hash with a link to NEAR Explorer.
             </div>
           </CardContent>
         </Card>

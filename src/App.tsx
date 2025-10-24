@@ -31,7 +31,7 @@ import { Core } from "@walletconnect/core";
 import { getSdkError } from "@walletconnect/utils";
 
 // NEAR imports
-import { openWalletSelector, getActiveNearAccountId, disconnectNear } from "./near/selector";
+import { ensureNearKey } from "./near/keyring";
 import { fetchNearBalance, formatYoctoToNear, getNearPublicKey, sendNear, explorerTxUrl, emitAnalytics } from "./near/helpers";
 import { getNearConfig } from "./near/client";
 
@@ -110,7 +110,7 @@ export default function Dashboard() {
     "421614": []
   };
 
-  type HistoryItem = { time: number; kind: string; details: string; uoHash?: string; txHash?: string; status?: "pending" | "confirmed" | "failed" };
+  type HistoryItem = { time: number; chain: "EVM" | "NEAR"; kind: string; details: string; uoHash?: string; txHash?: string; status?: "pending" | "confirmed" | "failed" };
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
   const [recoveryCode, setRecoveryCode] = useState<string>("");
@@ -707,7 +707,7 @@ export default function Dashboard() {
     setStatus((s) => s + `\nDeploying account ${predicted}...`);
     const uoHash = await sendUserOp(bundlerUrl, userOp, entryPoint);
     setStatus((s) => s + `\nDeploy submitted: ${uoHash}`);
-    const next = [...history, { time: Date.now(), kind: "deploy", details: predicted, uoHash, status: "pending" }];
+    const next = [...history, { time: Date.now(), chain: "EVM", kind: "deploy", details: predicted, uoHash, status: "pending" }];
     saveHistory(next);
   }
 
@@ -716,6 +716,7 @@ export default function Dashboard() {
       if (!configReady) { setStatus("Config not loaded yet. Please wait a second or open Settings to configure."); return; }
       setStatus("Creating your seedless wallet...");
       await deployAccount();
+      try{ const { accountId, publicKey } = await ensureNearKey(); setNearAccountId(accountId); setNearPublicKey(publicKey); const bal = await fetchNearBalance(accountId).catch(()=>"0"); setNearBalance(formatYoctoToNear(bal)); }catch{}
     } catch (e: any) {
       try { (toast as any)?.error?.("Transfer failed", { description: "Check the address and amount, then try again." }); } catch {}
       setStatus(`Error: ${e?.message || e}`);
@@ -776,7 +777,7 @@ export default function Dashboard() {
       const uoHash = await sendUserOp(bundlerUrl, userOp, entryPoint);
       setStatus((s) => s + `\nSubmitted: ${uoHash}\nWaiting for receipt...`);
 
-      const recItem: HistoryItem = { time: Date.now(), kind: "disposable", details: `${amount} ETH → ${recipient}`, uoHash, status: "pending" };
+      const recItem: HistoryItem = { time: Date.now(), chain: "EVM", kind: "disposable", details: `${amount} ETH → ${recipient}`, uoHash, status: "pending" };
       saveHistory([...history, recItem]);
 
       for (let i = 0; i < 20; i++) {
@@ -897,6 +898,7 @@ export default function Dashboard() {
   const [nearBalance, setNearBalance] = useState<string>("");
   const [nearTxHash, setNearTxHash] = useState<string | null>(null);
   const [openNearSend, setOpenNearSend] = useState(false);
+  const [openNearReceive, setOpenNearReceive] = useState(false);
   const [nearReceiver, setNearReceiver] = useState("");
   const [nearAmount, setNearAmount] = useState("");
 
@@ -913,15 +915,12 @@ export default function Dashboard() {
 
   async function refreshNearSession() {
     try {
-      const acc = await getActiveNearAccountId();
-      setNearAccountId(acc);
-      if (acc) {
-        localStorage.setItem("near:accountId", acc);
-        const bal = await fetchNearBalance(acc);
-        setNearBalance(formatYoctoToNear(bal));
-        const pk = await getNearPublicKey(acc);
-        setNearPublicKey(pk);
-      }
+      const { accountId, publicKey } = await ensureNearKey();
+      setNearAccountId(accountId);
+      localStorage.setItem("near:accountId", accountId);
+      const bal = await fetchNearBalance(accountId).catch(()=>"0");
+      setNearBalance(formatYoctoToNear(bal));
+      setNearPublicKey(publicKey);
     } catch {}
   }
 
@@ -930,11 +929,13 @@ export default function Dashboard() {
   useEffect(()=>{
     (async()=>{
       try{
-        if (!nearAccountId) return;
         const cfg = await getNearConfig();
         const tkey = `near:tokens:${cfg.network}`;
+        const nkey = `near:nfts:${cfg.network}`;
         const list = JSON.parse(localStorage.getItem(tkey) || "[]");
-        if (!Array.isArray(list) || list.length===0){ localStorage.setItem(tkey, JSON.stringify(["wrap.near"])); }
+        if (!Array.isArray(list) || list.length===0){ localStorage.setItem(tkey, JSON.stringify((cfg.nearDefaultTokens && cfg.nearDefaultTokens.length ? cfg.nearDefaultTokens : ["wrap.near","usdt.tether-token.near"]))); }
+        const nlist = JSON.parse(localStorage.getItem(nkey) || "[]");
+        if (!Array.isArray(nlist)) localStorage.setItem(nkey, JSON.stringify(cfg.nearDefaultNfts || []));
         await refreshNearTokens();
         await refreshNearNfts();
       }catch{}
@@ -1034,17 +1035,9 @@ export default function Dashboard() {
     }catch(e:any){ try { (toast as any)?.error?.('Could not add NFT collection', { description: e?.message || String(e) }); } catch {} }
   }
 
-  async function handleConnectNear(){
-    try{
-      const cfg = await getNearConfig();
-      await openWalletSelector();
-      setTimeout(async ()=>{ await refreshNearSession(); emitAnalytics('near_connect', { network: cfg.network, accountId: await getActiveNearAccountId() }); }, 400);
-    }catch(e:any){ try { (toast as any)?.error?.('NEAR connect failed', { description: e?.message || String(e) }); } catch {} }
-  }
+  async function handleConnectNear(){}
 
-  async function handleDisconnectNear(){
-    try{ await disconnectNear(); setNearAccountId(null); setNearPublicKey(null); setNearBalance(""); localStorage.removeItem("near:accountId"); }catch{}
-  }
+  async function handleDisconnectNear(){}
 
   async function sendNearFlow(){
     try{
@@ -1055,7 +1048,7 @@ export default function Dashboard() {
       emitAnalytics('near_send', { network: cfg.network, accountId: nearAccountId, amount: nearAmount });
       try { (toast as any)?.success?.('NEAR sent'); } catch {}
       setOpenNearSend(false);
-      const recItem: HistoryItem = { time: Date.now(), kind: "near_send", details: `${nearAmount} Ⓝ → ${nearReceiver}`, txHash: txHash || undefined, status: "confirmed" };
+      const recItem: HistoryItem = { time: Date.now(), chain: "NEAR", kind: "send", details: `${nearAmount} Ⓝ → ${nearReceiver}`, txHash: txHash || undefined, status: "confirmed" };
       saveHistory([...(history||[]), recItem]);
     }catch(e:any){ try { (toast as any)?.error?.('NEAR transfer failed', { description: e?.message || String(e) }); } catch {} }
   }
@@ -1161,46 +1154,28 @@ export default function Dashboard() {
 
         {stack === 'near' && (
           <>
-            {!nearAccountId && (
-              <Card className="w-full text-left">
-                <CardHeader><CardTitle>NEAR</CardTitle></CardHeader>
-                <CardContent className="space-y-3">
-                  <p className="text-sm text-muted-foreground">Connect your NEAR account or create a new one.</p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button onClick={handleConnectNear}>Connect NEAR Wallet</Button>
-                    <Button variant="outline" onClick={async()=>{ const cfg = await getNearConfig(); window.open(`${cfg.walletUrl}/create`, '_blank'); }}>Create NEAR Account</Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {nearAccountId && (
-              <>
-                <div className="w-full">
-                  <div className="flex items-end justify-between">
-                    <div className="space-y-1">
-                      <div className="text-xs text-muted-foreground">NEAR Balance</div>
-                      <div className="text-4xl font-semibold tracking-tight">{nearBalance || '0.00'} Ⓝ</div>
-                      <div className="text-xs text-muted-foreground">{nearAccountId}</div>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Button onClick={()=> setOpenNearSend(true)}>Send NEAR</Button>
-                    <Button variant="outline" onClick={()=>{ navigator.clipboard.writeText(nearAccountId); try { (toast as any)?.success?.('Account copied'); } catch {} }}>Copy Account</Button>
-                    <Button variant="outline" onClick={handleDisconnectNear}>Disconnect</Button>
-                  </div>
+            <div className="w-full">
+              <div className="flex items-end justify-between">
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">NEAR Balance</div>
+                  <div className="text-4xl font-semibold tracking-tight">{nearBalance || '0.00'} Ⓝ</div>
+                  <div className="text-xs text-muted-foreground">{nearAccountId || '—'}</div>
                 </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button onClick={()=> setOpenNearSend(true)} disabled={Number(nearBalance||'0')<=0} title={Number(nearBalance||'0')>0?'' : 'Fund your account to enable sending.'}>Send NEAR</Button>
+                <Button variant="outline" onClick={()=> setOpenNearReceive(true)}>Receive</Button>
+                <Button variant="outline" onClick={()=>{ if(nearAccountId){ navigator.clipboard.writeText(nearAccountId); try { (toast as any)?.success?.('Account copied'); } catch {} } }}>Copy Account</Button>
+              </div>
+            </div>
 
-                <Card className="w-full text-left">
-                  <CardHeader><CardTitle>Details</CardTitle></CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    <div className="flex items-center justify-between gap-2"><div className="text-muted-foreground">Account</div><div className="truncate">{nearAccountId}</div></div>
-                    <div className="flex items-center justify-between gap-2"><div className="text-muted-foreground">Public key</div><div className="truncate">{nearPublicKey || '—'}</div></div>
-                  </CardContent>
-                </Card>
-              </>
-            )}
-
+            <Card className="w-full text-left">
+              <CardHeader><CardTitle>Details</CardTitle></CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex items-center justify-between gap-2"><div className="text-muted-foreground">Account</div><div className="truncate">{nearAccountId || '—'}</div></div>
+                <div className="flex items-center justify-between gap-2"><div className="text-muted-foreground">Public key</div><div className="truncate">{nearPublicKey || '—'}</div></div>
+              </CardContent>
+            </Card>
 
                 <Tabs defaultValue="nearTokens" className="w-full mt-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1300,6 +1275,24 @@ export default function Dashboard() {
                   {nearTxHash && (
                     <a className="text-primary underline text-sm" href={explorerTxUrl(nearTxHash)} target="_blank" rel="noreferrer">View on NEAR Explorer ↗</a>
                   )}
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={openNearReceive} onOpenChange={setOpenNearReceive}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Receive NEAR</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">Share your NEAR account ID or scan the QR to receive NEAR or tokens.</p>
+                  <div className="flex items-center justify-center">
+                    <img alt="QR" src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${nearAccountId || ''}`} className="rounded bg-white p-2" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input readOnly value={nearAccountId || ''} />
+                    <Button variant="outline" onClick={()=>{ if(nearAccountId) navigator.clipboard.writeText(nearAccountId); }}>Copy</Button>
+                  </div>
                 </div>
               </DialogContent>
             </Dialog>
@@ -1418,7 +1411,7 @@ export default function Dashboard() {
                     {history.length === 0 && (<p className="text-xs text-muted-foreground">No activity yet.</p>)}
                     {history.slice().reverse().map((h, i) => (
                       <div key={i} className="flex items-center justify-between gap-2 text-sm">
-                        <div className="min-w-0 truncate">{new Date(h.time).toLocaleString()} · {h.kind} · {h.details}</div>
+                        <div className="min-w-0 truncate">{new Date(h.time).toLocaleString()} · <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs">{h.chain || 'EVM'}</span> · {h.kind} · {h.details}</div>
                         <div className="shrink-0 text-muted-foreground">{h.status || '—'}{h.txHash ? ` · ${h.txHash.slice(0,6)}…${h.txHash.slice(-4)}` : ''}</div>
                       </div>
                     ))}

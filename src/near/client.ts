@@ -8,6 +8,8 @@ const DEFAULTS: NearConfig = {
   walletUrl: "https://app.mynearwallet.com",
   helperUrl: "https://helper.mainnet.near.org",
   explorerUrl: "https://explorer.near.org",
+  nearDefaultTokens: ["wrap.near", "usdt.tether-token.near"],
+  nearDefaultNfts: [],
 };
 
 function fromEnv(): Partial<NearConfig> {
@@ -16,11 +18,15 @@ function fromEnv(): Partial<NearConfig> {
   const nodeUrl = env.VITE_NEAR_NODE_URL as string | undefined;
   const walletUrl = env.VITE_NEAR_WALLET_URL as string | undefined;
   const helperUrl = env.VITE_NEAR_HELPER_URL as string | undefined;
+  const nearDefaultTokens = (()=>{ try{ const v = env.VITE_NEAR_DEFAULT_TOKENS; return v ? String(v).split(',').map((s:string)=>s.trim()).filter(Boolean) : undefined; }catch{ return undefined; }})();
+  const nearDefaultNfts = (()=>{ try{ const v = env.VITE_NEAR_DEFAULT_NFTS; return v ? String(v).split(',').map((s:string)=>s.trim()).filter(Boolean) : undefined; }catch{ return undefined; }})();
   return {
     network,
     nodeUrl,
     walletUrl,
     helperUrl,
+    nearDefaultTokens,
+    nearDefaultNfts,
   } as Partial<NearConfig>;
 }
 
@@ -33,7 +39,9 @@ async function fromServer(): Promise<Partial<NearConfig>> {
     const nodeUrl = (j.nearNodeUrl || j.VITE_NEAR_NODE_URL) as string | undefined;
     const walletUrl = (j.nearWalletUrl || j.VITE_NEAR_WALLET_URL) as string | undefined;
     const helperUrl = (j.nearHelperUrl || j.VITE_NEAR_HELPER_URL) as string | undefined;
-    return { network, nodeUrl, walletUrl, helperUrl };
+    const nearDefaultTokens = (j.nearDefaultTokens || undefined) as string[] | undefined;
+    const nearDefaultNfts = (j.nearDefaultNfts || undefined) as string[] | undefined;
+    return { network, nodeUrl, walletUrl, helperUrl, nearDefaultTokens, nearDefaultNfts };
   } catch {
     return {};
   }
@@ -45,7 +53,9 @@ function fromLocalStorage(): Partial<NearConfig> {
     const nodeUrl = localStorage.getItem("near:nodeUrl") || undefined;
     const walletUrl = localStorage.getItem("near:walletUrl") || undefined;
     const helperUrl = localStorage.getItem("near:helperUrl") || undefined;
-    return { network, nodeUrl, walletUrl, helperUrl };
+    const nearDefaultTokens = (()=>{ try{ const s = localStorage.getItem("near:defaults:tokens"); return s ? JSON.parse(s) : undefined; }catch{ return undefined; }})();
+    const nearDefaultNfts = (()=>{ try{ const s = localStorage.getItem("near:defaults:nfts"); return s ? JSON.parse(s) : undefined; }catch{ return undefined; }})();
+    return { network, nodeUrl, walletUrl, helperUrl, nearDefaultTokens, nearDefaultNfts };
   } catch {
     return {};
   }
