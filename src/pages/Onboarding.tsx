@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { encodeSelf, estimateUserOp, getGasPrice, getUserOpHash, packInitCode, predictAccountAddress, sponsorUserOp, sendUserOp, UserOperation, dataConfigureGuardiansBySelf, getChainId } from "../lib/aa";
+import { estimateUserOp, getGasPrice, getUserOpHash, packInitCode, predictAccountAddress, sponsorUserOp, sendUserOp, UserOperation, getChainId } from "../lib/aa";
 import { useNavigate } from "react-router-dom";
 import { track } from "../lib/analytics";
 import { upsertUser } from "../lib/supabase";
@@ -20,10 +20,6 @@ export default function Onboarding(){
   const [accSalt, setAccSalt] = useState<string | null>(null);
   const [accountAddr, setAccountAddr] = useState<string | null>(null);
 
-  const [g1, setG1] = useState("");
-  const [g2, setG2] = useState("");
-  const [g3, setG3] = useState("");
-  const [delayHours, setDelayHours] = useState<string>("48");
 
   const [status, setStatus] = useState("");
   const [email, setEmail] = useState<string>("");
@@ -127,36 +123,6 @@ export default function Onboarding(){
     }catch(e:any){ setStatus(`Error: ${e?.message||e}`); }
   }
 
-  async function configureGuardians(){
-    try{
-      if (!accountAddr) throw new Error("Deploy or predict account first");
-      const w = ensureOwner();
-      const delaySeconds = Math.max(0, Math.floor(Number(delayHours||"0") * 3600));
-      const data = dataConfigureGuardiansBySelf([g1,g2,g3].filter(Boolean), 2, delaySeconds);
-      let userOp: UserOperation = {
-        sender: accountAddr, nonce: 0n, initCode: "0x",
-        callData: encodeSelf(accountAddr, data),
-        callGasLimit: 0n, verificationGasLimit: 0n, preVerificationGas: 0n,
-        maxFeePerGas: 0n, maxPriorityFeePerGas: 0n, paymasterAndData: "0x", signature: "0x"
-      };
-      const est = await estimateUserOp(bundlerUrl, userOp, entryPoint);
-      const gasPrice = await getGasPrice(bundlerUrl);
-      userOp = { ...userOp,
-        callGasLimit: BigInt(est.callGasLimit)+20000n,
-        verificationGasLimit: BigInt(est.verificationGasLimit)+20000n,
-        preVerificationGas: BigInt(est.preVerificationGas)+20000n,
-        maxFeePerGas: gasPrice.maxFeePerGas,
-        maxPriorityFeePerGas: gasPrice.maxPriorityFeePerGas
-      };
-      const spon = await sponsorUserOp(bundlerUrl, userOp, entryPoint, policyId);
-      userOp.paymasterAndData = spon.paymasterAndData;
-      const uoh = await getUserOpHash(rpc, entryPoint, userOp);
-      const sig = await w.signMessage(ethers.getBytes(uoh));
-      userOp.signature = sig;
-      const uoHash = await sendUserOp(bundlerUrl, userOp, entryPoint);
-      setStatus((s)=> s + `\nGuardians configured: ${uoHash}`);
-    }catch(e:any){ setStatus(`Error: ${e?.message||e}`); }
-  }
 
   function bytesToBase64(bytes: ArrayBuffer): string { const bin = String.fromCharCode(...new Uint8Array(bytes)); return btoa(bin); }
   function base64ToBytes(b64: string): Uint8Array { const bin = atob(b64); const out = new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i); return out; }
@@ -201,27 +167,6 @@ export default function Onboarding(){
           </CardContent>
         </Card>
 
-        <Card className="w-full text-left">
-          <CardHeader><CardTitle>Guardians</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div><Label>Guardian 1</Label><Input value={g1} onChange={(e)=>setG1(e.target.value)} placeholder="0x..."/></div>
-              <div><Label>Guardian 2</Label><Input value={g2} onChange={(e)=>setG2(e.target.value)} placeholder="0x..."/></div>
-              <div><Label>Guardian 3</Label><Input value={g3} onChange={(e)=>setG3(e.target.value)} placeholder="0x..."/></div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="sm:col-span-1">
-                <Label>Threshold</Label>
-                <Input readOnly value="2" />
-              </div>
-              <div className="sm:col-span-2">
-                <Label>Recovery delay (hours)</Label>
-                <Input value={delayHours} onChange={(e)=>setDelayHours(e.target.value)} placeholder="48" />
-              </div>
-            </div>
-            <Button onClick={configureGuardians}>Set Guardians</Button>
-          </CardContent>
-        </Card>
 
         <Card className="w-full text-left">
           <CardHeader><CardTitle>Backup Recovery Kit</CardTitle></CardHeader>
