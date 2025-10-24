@@ -32,7 +32,7 @@ import { getSdkError } from "@walletconnect/utils";
 
 // NEAR imports
 import { openWalletSelector, getActiveNearAccountId, disconnectNear } from "./near/selector";
-import { fetchNearBalance, formatYoctoToNear, getNearPublicKey, sendNear, explorerTxUrl, emitAnalytics } from "./near/helpers";
+import { fetchNearBalance, formatYoctoToNear, getNearPublicKey, sendNear, explorerTxUrl, emitAnalytics, fetchFtBalanceFormatted, sendFt } from "./near/helpers";
 import { getNearConfig } from "./near/client";
 
 export default function Dashboard() {
@@ -900,6 +900,46 @@ export default function Dashboard() {
   const [nearReceiver, setNearReceiver] = useState("");
   const [nearAmount, setNearAmount] = useState("");
 
+  type NearToken = { contractId: string; symbol: string; name: string; decimals: number; balance: string };
+  const [nearTokens, setNearTokens] = useState<NearToken[]>([]);
+  const [openNearAdd, setOpenNearAdd] = useState(false);
+  const [newNearTokenId, setNewNearTokenId] = useState("");
+  const [openNearSendToken, setOpenNearSendToken] = useState(false);
+  const [selectedNearToken, setSelectedNearToken] = useState<{ contractId: string; symbol: string; decimals: number } | null>(null);
+  const [nearTokenReceiver, setNearTokenReceiver] = useState("");
+  const [nearTokenAmount, setNearTokenAmount] = useState("");
+
+  async function nearTokensStorageKey(){ const cfg = await getNearConfig(); return `near:tokens:${cfg.network}`; }
+
+  async function refreshNearTokens(){
+    try{
+      if (!nearAccountId) { setNearTokens([]); return; }
+      const key = await nearTokensStorageKey();
+      const list = JSON.parse(localStorage.getItem(key) || "[]") as string[];
+      const out: NearToken[] = [];
+      for (const cid of list){
+        try{
+          const info = await fetchFtBalanceFormatted(cid, nearAccountId);
+          out.push({ contractId: cid, symbol: info.symbol, name: info.name, decimals: info.decimals, balance: info.balance });
+        }catch{}
+      }
+      setNearTokens(out);
+    }catch{}
+  }
+
+  async function addNearToken(){
+    try{
+      const id = newNearTokenId.trim();
+      if (!id || !id.includes('.')) { try { (toast as any)?.info?.('Enter a valid token contract accountId'); } catch {} return; }
+      const key = await nearTokensStorageKey();
+      const list = JSON.parse(localStorage.getItem(key) || "[]") as string[];
+      if (!list.includes(id)) { list.push(id); localStorage.setItem(key, JSON.stringify(list)); }
+      setNewNearTokenId(""); setOpenNearAdd(false);
+      await refreshNearTokens();
+      try { (toast as any)?.success?.('Token added'); } catch {}
+    }catch(e:any){ try { (toast as any)?.error?.('Could not add token', { description: e?.message || String(e) }); } catch {} }
+  }
+
   async function refreshNearSession() {
     try {
       const acc = await getActiveNearAccountId();
@@ -910,6 +950,7 @@ export default function Dashboard() {
         setNearBalance(formatYoctoToNear(bal));
         const pk = await getNearPublicKey(acc);
         setNearPublicKey(pk);
+        await refreshNearTokens();
       }
     } catch {}
   }
@@ -922,6 +963,7 @@ export default function Dashboard() {
       try {
         const bal = await fetchNearBalance(nearAccountId);
         setNearBalance(formatYoctoToNear(bal));
+        await refreshNearTokens();
       } catch {}
     }, 20000);
     return () => clearInterval(t);
@@ -936,7 +978,7 @@ export default function Dashboard() {
   }
 
   async function handleDisconnectNear(){
-    try{ await disconnectNear(); setNearAccountId(null); setNearPublicKey(null); setNearBalance(""); localStorage.removeItem("near:accountId"); }catch{}
+    try{ await disconnectNear(); setNearAccountId(null); setNearPublicKey(null); setNearBalance(""); localStorage.removeItem("near:accountId"); setNearTokens([]);}catch{}
   }
 
   async function sendNearFlow(){
@@ -945,10 +987,23 @@ export default function Dashboard() {
       const cfg = await getNearConfig();
       const { txHash } = await sendNear(nearReceiver.trim(), nearAmount.trim());
       setNearTxHash(txHash || null);
-      emitAnalytics('near_send', { network: cfg.network, accountId: nearAccountId, amount: nearAmount });
+      emitAnalytics('near_send', { network: cfg.network, accountId: nearAccountId, amount: nearAmount, asset: 'NEAR' });
       try { (toast as any)?.success?.('NEAR sent'); } catch {}
       setOpenNearSend(false);
     }catch(e:any){ try { (toast as any)?.error?.('NEAR transfer failed', { description: e?.message || String(e) }); } catch {} }
+  }
+
+  async function sendNearTokenFlow(){
+    try{
+      if (!selectedNearToken) return;
+      setStatus("Preparing NEAR token transfer...");
+      const cfg = await getNearConfig();
+      const { txHash } = await sendFt(selectedNearToken.contractId, nearTokenReceiver.trim(), nearTokenAmount.trim());
+      setNearTxHash(txHash || null);
+      emitAnalytics('near_send', { network: cfg.network, accountId: nearAccountId, amount: nearTokenAmount, asset: selectedNearToken.symbol, contractId: selectedNearToken.contractId });
+      try { (toast as any)?.success?.('Token sent'); } catch {}
+      setOpenNearSendToken(false);
+    }catch(e:any){ try { (toast as any)?.error?.('Token transfer failed', { description: e?.message || String(e) }); } catch {} }
   }
 
   return (
@@ -1083,6 +1138,22 @@ export default function Dashboard() {
                 </div>
 
                 <Card className="w-full text-left">
+                  <CardHeader className="flex flex-row items-center justify-between"><CardTitle>NEAR Tokens</CardTitle><Button variant="outline" size="sm" onClick={()=>setOpenNearAdd(true)}>+ Add</Button></CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    {nearTokens.length === 0 && (<p className="text-xs text-muted-foreground">Add NEP‑141 tokens by contract accountId to view balances.</p>)}
+                    {nearTokens.map((t)=> (
+                      <div key={t.contractId} className="flex items-center justify-between gap-2">
+                        <div className="min-w-0 truncate">{t.symbol} <span className="text-muted-foreground">· {t.name}</span></div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-right text-sm">{t.balance}</div>
+                          <Button size="sm" variant="outline" onClick={()=>{ setSelectedNearToken({ contractId: t.contractId, symbol: t.symbol, decimals: t.decimals }); setNearTokenReceiver(""); setNearTokenAmount(""); setOpenNearSendToken(true); }}>Send</Button>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                <Card className="w-full text-left">
                   <CardHeader><CardTitle>Details</CardTitle></CardHeader>
                   <CardContent className="space-y-2 text-sm">
                     <div className="flex items-center justify-between gap-2"><div className="text-muted-foreground">Account</div><div className="truncate">{nearAccountId}</div></div>
@@ -1112,6 +1183,49 @@ export default function Dashboard() {
                   </div>
                   {nearTxHash && (
                     <a className="text-primary underline text-sm" href={explorerTxUrl(nearTxHash)} target="_blank" rel="noreferrer">View on NEAR Explorer ↗</a>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={openNearAdd} onOpenChange={setOpenNearAdd}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add NEAR Token</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label>Token contract (accountId)</Label>
+                    <Input value={newNearTokenId} onChange={(e)=>setNewNearTokenId(e.target.value)} placeholder="usdt.tether-token.near" />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={()=>setOpenNearAdd(false)}>Cancel</Button>
+                    <Button onClick={addNearToken} disabled={!newNearTokenId}>Add</Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={openNearSendToken} onOpenChange={setOpenNearSendToken}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Send {selectedNearToken?.symbol || 'Token'}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label>Receiver (accountId)</Label>
+                    <Input value={nearTokenReceiver} onChange={(e)=>setNearTokenReceiver(e.target.value)} placeholder="bob.near" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Amount</Label>
+                    <Input value={nearTokenAmount} onChange={(e)=>setNearTokenAmount(e.target.value)} placeholder="0.00" />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={()=>setOpenNearSendToken(false)}>Cancel</Button>
+                    <Button onClick={sendNearTokenFlow} disabled={!nearTokenReceiver || !nearTokenAmount}>Send</Button>
+                  </div>
+                  {nearTxHash && (
+                    <a className="text-primary underline text-sm" href={nearTxHash ? explorerTxUrl(nearTxHash) : '#'} target="_blank" rel="noreferrer">View on NEAR Explorer ↗</a>
                   )}
                 </div>
               </DialogContent>
