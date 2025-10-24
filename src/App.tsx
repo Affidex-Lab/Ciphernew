@@ -900,6 +900,17 @@ export default function Dashboard() {
   const [nearReceiver, setNearReceiver] = useState("");
   const [nearAmount, setNearAmount] = useState("");
 
+  type NearToken = { contractId: string; symbol: string; name: string; decimals: number; balance: string };
+  const [nearTokens, setNearTokens] = useState<NearToken[]>([]);
+  const [openNearAddToken, setOpenNearAddToken] = useState(false);
+  const [newNearTokenId, setNewNearTokenId] = useState("");
+
+  type NearNftItem = { token_id: string; title?: string; media?: string };
+  type NearNftCollection = { contractId: string; name?: string; symbol?: string; items: NearNftItem[] };
+  const [nearNftCollections, setNearNftCollections] = useState<NearNftCollection[]>([]);
+  const [openNearAddNft, setOpenNearAddNft] = useState(false);
+  const [newNearNftId, setNewNearNftId] = useState("");
+
   async function refreshNearSession() {
     try {
       const acc = await getActiveNearAccountId();
@@ -916,6 +927,20 @@ export default function Dashboard() {
 
   useEffect(() => { (async()=>{ try{ await refreshNearSession(); }catch{} })(); }, []);
 
+  useEffect(()=>{
+    (async()=>{
+      try{
+        if (!nearAccountId) return;
+        const cfg = await getNearConfig();
+        const tkey = `near:tokens:${cfg.network}`;
+        const list = JSON.parse(localStorage.getItem(tkey) || "[]");
+        if (!Array.isArray(list) || list.length===0){ localStorage.setItem(tkey, JSON.stringify(["wrap.near"])); }
+        await refreshNearTokens();
+        await refreshNearNfts();
+      }catch{}
+    })();
+  }, [nearAccountId]);
+
   useEffect(() => {
     if (!nearAccountId) return;
     const t = setInterval(async () => {
@@ -926,6 +951,88 @@ export default function Dashboard() {
     }, 20000);
     return () => clearInterval(t);
   }, [nearAccountId]);
+
+  async function nearViewFunction(contractId: string, method: string, args?: any){
+    const { providers } = await import("near-api-js");
+    const cfg = await getNearConfig();
+    const provider = new providers.JsonRpcProvider({ url: cfg.nodeUrl });
+    const res: any = await provider.query({ request_type: "call_function", account_id: contractId, method_name: method, args_base64: btoa(JSON.stringify(args || {})), finality: "final" });
+    const out = new TextDecoder().decode(res.result || new Uint8Array());
+    try { return JSON.parse(out); } catch { return out; }
+  }
+
+  async function refreshNearTokens(){
+    try{
+      if (!nearAccountId) return;
+      const cfg = await getNearConfig();
+      const key = `near:tokens:${cfg.network}`;
+      const ids = JSON.parse(localStorage.getItem(key) || "[]") as string[];
+      const list: NearToken[] = [];
+      for (const id of ids){
+        try{
+          const meta = await nearViewFunction(id, "ft_metadata", {});
+          const balRaw = await nearViewFunction(id, "ft_balance_of", { account_id: nearAccountId });
+          const decimals = Number(meta?.decimals || 24);
+          const symbol = String(meta?.symbol || "FT");
+          const name = String(meta?.name || "Fungible Token");
+          const balance = (()=>{ try{ return ethers.formatUnits(balRaw || "0", decimals); } catch { return "0"; } })();
+          list.push({ contractId: id, symbol, name, decimals, balance });
+        }catch{}
+      }
+      setNearTokens(list);
+    }catch{}
+  }
+
+  async function refreshNearNfts(){
+    try{
+      if (!nearAccountId) return;
+      const cfg = await getNearConfig();
+      const key = `near:nfts:${cfg.network}`;
+      const ids = JSON.parse(localStorage.getItem(key) || "[]") as string[];
+      const cols: NearNftCollection[] = [];
+      for (const id of ids){
+        try{
+          const meta = await nearViewFunction(id, "nft_metadata", {});
+          const tokens = await nearViewFunction(id, "nft_tokens_for_owner", { account_id: nearAccountId, from_index: "0", limit: 50 });
+          const items = Array.isArray(tokens) ? tokens.map((t:any)=> ({ token_id: String(t.token_id||t.tokenId||""), title: t.metadata?.title, media: t.metadata?.media })) : [];
+          cols.push({ contractId: id, name: meta?.name, symbol: meta?.symbol, items });
+        }catch{}
+      }
+      setNearNftCollections(cols);
+    }catch{}
+  }
+
+  async function addNearToken(){
+    try{
+      const id = newNearTokenId.trim();
+      if (!id) return;
+      const cfg = await getNearConfig();
+      const key = `near:tokens:${cfg.network}`;
+      const list = JSON.parse(localStorage.getItem(key) || "[]") as string[];
+      if (!list.includes(id)) list.push(id);
+      localStorage.setItem(key, JSON.stringify(list));
+      setNewNearTokenId("");
+      setOpenNearAddToken(false);
+      try { (toast as any)?.success?.('Token added'); } catch {}
+      await refreshNearTokens();
+    }catch(e:any){ try { (toast as any)?.error?.('Could not add token', { description: e?.message || String(e) }); } catch {} }
+  }
+
+  async function addNearNft(){
+    try{
+      const id = newNearNftId.trim();
+      if (!id) return;
+      const cfg = await getNearConfig();
+      const key = `near:nfts:${cfg.network}`;
+      const list = JSON.parse(localStorage.getItem(key) || "[]") as string[];
+      if (!list.includes(id)) list.push(id);
+      localStorage.setItem(key, JSON.stringify(list));
+      setNewNearNftId("");
+      setOpenNearAddNft(false);
+      try { (toast as any)?.success?.('NFT collection added'); } catch {}
+      await refreshNearNfts();
+    }catch(e:any){ try { (toast as any)?.error?.('Could not add NFT collection', { description: e?.message || String(e) }); } catch {} }
+  }
 
   async function handleConnectNear(){
     try{
@@ -948,6 +1055,8 @@ export default function Dashboard() {
       emitAnalytics('near_send', { network: cfg.network, accountId: nearAccountId, amount: nearAmount });
       try { (toast as any)?.success?.('NEAR sent'); } catch {}
       setOpenNearSend(false);
+      const recItem: HistoryItem = { time: Date.now(), kind: "near_send", details: `${nearAmount} Ⓝ → ${nearReceiver}`, txHash: txHash || undefined, status: "confirmed" };
+      saveHistory([...(history||[]), recItem]);
     }catch(e:any){ try { (toast as any)?.error?.('NEAR transfer failed', { description: e?.message || String(e) }); } catch {} }
   }
 
@@ -1091,6 +1200,84 @@ export default function Dashboard() {
                 </Card>
               </>
             )}
+
+
+                <Tabs defaultValue="nearTokens" className="w-full mt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <TabsList>
+                      <TabsTrigger value="nearTokens">Tokens</TabsTrigger>
+                      <TabsTrigger value="nearNfts">NFTs</TabsTrigger>
+                    </TabsList>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={()=> setOpenNearAddToken(true)}>+ Add FT</Button>
+                      <Button variant="outline" size="sm" onClick={()=> setOpenNearAddNft(true)}>+ Add NFT</Button>
+                    </div>
+                  </div>
+                  <TabsContent value="nearTokens" className="mt-2">
+                    <Card className="w-full text-left"><CardContent className="space-y-4 pt-6">
+                      <div className="space-y-1">
+                        {nearTokens.length === 0 && (<p className="text-xs text-muted-foreground">No NEAR tokens yet — add from “+ Add FT”.</p>)}
+                        {nearTokens.map(t => (
+                          <div key={t.contractId} className="flex items-center justify-between gap-2 text-sm">
+                            <div className="min-w-0 truncate">{t.symbol} <span className="text-muted-foreground">· {t.name}</span></div>
+                            <div className="shrink-0">{t.balance || '0'}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent></Card>
+                  </TabsContent>
+                  <TabsContent value="nearNfts" className="mt-2">
+                    <Card className="w-full text-left"><CardContent className="space-y-4 pt-6">
+                      {nearNftCollections.length === 0 && (<p className="text-xs text-muted-foreground">No NFT collections yet — add from “+ Add NFT”.</p>)}
+                      {nearNftCollections.map(col => (
+                        <div key={col.contractId} className="space-y-2">
+                          <div className="text-sm font-medium">{col.name || col.symbol || col.contractId}</div>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                            {col.items.map((it, i)=> (
+                              <div key={col.contractId+':'+it.token_id+':'+i} className="rounded border p-2 text-xs">
+                                {it.media ? (<img alt={it.title||it.token_id} src={it.media} className="mb-2 h-24 w-full rounded object-cover" />) : null}
+                                <div className="truncate">{it.title || it.token_id}</div>
+                              </div>
+                            ))}
+                            {col.items.length===0 && (<div className="text-xs text-muted-foreground">No tokens in this collection.</div>)}
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent></Card>
+                  </TabsContent>
+                </Tabs>
+
+                <Dialog open={openNearAddToken} onOpenChange={setOpenNearAddToken}>
+                  <DialogContent>
+                    <DialogHeader><DialogTitle>Add NEAR token (NEP-141)</DialogTitle></DialogHeader>
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <Label>Token contract ID</Label>
+                        <Input value={newNearTokenId} onChange={(e)=>setNewNearTokenId(e.target.value)} placeholder="wrap.near" />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={()=>setOpenNearAddToken(false)}>Cancel</Button>
+                        <Button onClick={addNearToken} disabled={!newNearTokenId.trim()}>Add</Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                <Dialog open={openNearAddNft} onOpenChange={setOpenNearAddNft}>
+                  <DialogContent>
+                    <DialogHeader><DialogTitle>Add NFT collection (NEP-171)</DialogTitle></DialogHeader>
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <Label>Collection contract ID</Label>
+                        <Input value={newNearNftId} onChange={(e)=>setNewNearNftId(e.target.value)} placeholder="example-nft.near" />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={()=>setOpenNearAddNft(false)}>Cancel</Button>
+                        <Button onClick={addNearNft} disabled={!newNearNftId.trim()}>Add</Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
 
             <Dialog open={openNearSend} onOpenChange={setOpenNearSend}>
               <DialogContent>
