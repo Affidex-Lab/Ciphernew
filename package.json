@@ -70,7 +70,9 @@
     "zod": "^3.25.20",
     "@near-wallet-selector/core": "^8.3.0",
     "@near-wallet-selector/modal-ui": "^8.3.0",
-    "@near-wallet-selector/my-near-wallet": "^8.3.0"
+    "@near-wallet-selector/my-near-wallet": "^8.3.0",
+    "buffer": "^6.0.3",
+    "process": "^0.11.10"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250620.0",
