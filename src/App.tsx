@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { Web3Wallet } from "@walletconnect/web3wallet";
 import { Core } from "@walletconnect/core";
 import { getSdkError } from "@walletconnect/utils";
+import SendDialog from "./components/SendDialog";
 
 export default function Dashboard() {
   const [bundlerUrl, setBundlerUrl] = useState("");
@@ -38,6 +39,7 @@ export default function Dashboard() {
   const [accFactory, setAccFactory] = useState("");
   const [wcProjectId, setWcProjectId] = useState("");
 
+  const [openSend, setOpenSend] = useState(false);
   const [openTransfer, setOpenTransfer] = useState(false);
   const [openReceive, setOpenReceive] = useState(false);
   const [openDisposable, setOpenDisposable] = useState(false);
@@ -987,7 +989,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <Button onClick={() => { setOpenTransfer(true); setStep(1); }}>Send</Button>
+                <Button onClick={() => { setOpenSend(true); }}>Send</Button>
                 <Button variant="outline" onClick={()=>setOpenReceive(true)}>Receive</Button>
                 <Button variant="outline" onClick={createDisposableKey}>Disposable Key</Button>
                 <Button variant="outline" onClick={()=> { try { (toast as any)?.info?.('Funding coming soon'); } catch {} }}>Fund wallet</Button>
@@ -1095,10 +1097,12 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
+        <SendDialog open={openSend} onOpenChange={setOpenSend} accountAddr={accountAddr} ownerPk={ownerPk} bundlerUrl={bundlerUrl} entryPoint={entryPoint} policyId={policyId} rpc={rpc} tokens={tokens as any} usdPrice={usdPrice} />
+
         <Dialog open={openTransfer} onOpenChange={setOpenTransfer}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{step === 1 ? "New Transfer" : "Review & Send"}</DialogTitle>
+              <DialogTitle>{step === 1 ? "Disposable transfer" : "Review & Send (disposable)"}</DialogTitle>
             </DialogHeader>
             {step === 1 ? (
               <div className="space-y-3">
@@ -1121,7 +1125,7 @@ export default function Dashboard() {
                 </p>
                 <div className="flex justify-between gap-2">
                   <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
-                  <Button onClick={sendDisposableTx}>Send</Button>
+                  <Button onClick={sendDisposableTx}>Send disposable</Button>
                 </div>
               </div>
             )}

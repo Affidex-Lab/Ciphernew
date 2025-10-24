@@ -14,6 +14,7 @@ export default function Access(){
   const [accountAddr, setAccountAddr] = useState("");
   const [ownerPk, setOwnerPk] = useState("");
   const [ownerAddr, setOwnerAddr] = useState("");
+  const [pkError, setPkError] = useState<string>("");
   const nav = useNavigate();
 
   const rpc = useMemo(()=> rpcUrl || bundlerUrl || "", [rpcUrl, bundlerUrl]);
@@ -40,6 +41,15 @@ export default function Access(){
     })();
   },[]);
 
+  useEffect(()=>{
+    try{
+      setPkError("");
+      if (!ownerPk){ setOwnerAddr(""); return; }
+      const w = new ethers.Wallet(ownerPk);
+      setOwnerAddr(w.address);
+    }catch{ setPkError('Invalid private key'); setOwnerAddr(""); }
+  }, [ownerPk]);
+
   function load(){
     if (!ethers.isAddress(accountAddr)) { try { (toast as any)?.error?.('Enter a valid account address'); } catch {} return; }
     localStorage.setItem('accountAddr', accountAddr);
@@ -49,7 +59,7 @@ export default function Access(){
         setOwnerAddr(w.address);
         localStorage.setItem('ownerPk', ownerPk);
         localStorage.setItem('ownerAddr', w.address);
-      }catch{ try { (toast as any)?.error?.('Invalid private key (optional field)'); } catch {} }
+      }catch{ try { (toast as any)?.error?.('Invalid private key (optional field)'); } catch {} return; }
     }
     nav('/dashboard');
   }
@@ -73,10 +83,13 @@ export default function Access(){
             <div className="space-y-1">
               <Label>Owner private key (optional, demo only)</Label>
               <Input value={ownerPk} onChange={(e)=>setOwnerPk(e.target.value)} placeholder="0x..." />
+              {ownerPk && (
+                <div className="text-xs text-muted-foreground">{pkError ? <span className="text-destructive">{pkError}</span> : <>Derived owner address: <span className="font-mono">{ownerAddr}</span></>}</div>
+              )}
             </div>
             <div className="flex gap-2">
               <Button onClick={load}>Access Wallet</Button>
-              <Button variant="outline" onClick={()=>nav('/dashboard?autocreate=1')}>Create new</Button>
+              <Button variant="outline" onClick={()=>nav('/onboarding')}>Create new</Button>
             </div>
           </CardContent>
         </Card>
