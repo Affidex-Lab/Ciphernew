@@ -1,0 +1,14 @@
+{
+  "rpcUrl": "https://sepolia.infura.io/v3/INSERT_KEY_OR_USE_PUBLIC",
+  "chainIdHex": "0xaa36a7",
+  "entryPoint": "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789",
+  "accountFactory": "0x0000000000000000000000000000000000000000",
+  "bundlerUrl": "https://api.stackup.sh/v1/node/INSERT_KEY",
+  "policyId": "",
+  "nearNetwork": "mainnet",
+  "nearNodeUrl": "https://rpc.mainnet.near.org",
+  "nearWalletUrl": "https://app.mynearwallet.com",
+  "nearHelperUrl": "https://helper.mainnet.near.org",
+  "nearDefaultTokens": ["wrap.near", "usdt.tether-token.near"],
+  "nearDefaultNfts": []
+}
