@@ -55,28 +55,47 @@ export default function Access(){
   }
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-black via-background to-background">
-      <header className="mx-auto w-full max-w-6xl px-4 py-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-lg font-semibold tracking-tight">Cipher Wallet</span>
+    <div className="min-h-screen w-full dark:bg-gradient-to-b dark:from-black via-background to-background">
+      <header className="mx-auto w-full max-w-6xl px-4 py-6 mb-10 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-around">
+        <div className="flex items-center justify-center gap-2 pb-3 sm:pb-0">
+          <span className="text-center items-center text-balance font-bold tracking-tight text-3xl md:text-4xl">
+            Cipher Wallet
+          </span>
         </div>
-        <Button variant="outline" size="sm" onClick={()=>nav('/')}>Home</Button>
+        <Button variant="outline" size="sm" onClick={() => nav("/")}>
+          Home
+        </Button>
       </header>
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pb-20">
         <Card>
-          <CardHeader><CardTitle>Access Your Wallet</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-2xl">Access Your Wallet</CardTitle>
+          </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1">
               <Label>Account address</Label>
-              <Input value={accountAddr} onChange={(e)=>setAccountAddr(e.target.value)} placeholder="0x..." />
+              <Input
+                value={accountAddr}
+                onChange={(e) => setAccountAddr(e.target.value)}
+                placeholder="0x..."
+              />
             </div>
             <div className="space-y-1">
-              <Label>Owner private key (optional, demo only)</Label>
-              <Input value={ownerPk} onChange={(e)=>setOwnerPk(e.target.value)} placeholder="0x..." />
+              <Label>Owner private key (optional)</Label>
+              <Input
+                value={ownerPk}
+                onChange={(e) => setOwnerPk(e.target.value)}
+                placeholder="0x..."
+              />
             </div>
             <div className="flex gap-2">
               <Button onClick={load}>Access Wallet</Button>
-              <Button variant="outline" onClick={()=>nav('/dashboard?autocreate=1')}>Create new</Button>
+              <Button
+                variant="outline"
+                onClick={() => nav("/dashboard?autocreate=1")}
+              >
+                Create new
+              </Button>
             </div>
           </CardContent>
         </Card>

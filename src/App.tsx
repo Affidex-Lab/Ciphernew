@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Settings, WalletMinimal, ChevronDown, Bell, Home as HomeIcon, Compass, ActivitySquare } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ethers } from "ethers";
 import {
   encodeExecuteAndBurn,
@@ -36,6 +37,10 @@ import { fetchNearBalance, formatYoctoToNear, getNearPublicKey, sendNear, explor
 import { getNearConfig } from "./near/client";
 
 export default function Dashboard() {
+  //Nav Variable
+  const nav = useNavigate();
+  
+  //Other Variables
   const [bundlerUrl, setBundlerUrl] = useState("");
   const [rpcUrl, setRpcUrl] = useState("");
   const [entryPoint, setEntryPoint] = useState("");
@@ -1054,95 +1059,191 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-gradient-to-b from-black via-background to-background pb-20">
+    <div className="min-h-screen w-full overflow-x-hidden dark:bg-gradient-to-b dark:from-black via-background to-background pb-20">
       <header className="mx-auto w-full max-w-6xl px-4 py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
-          <ToggleGroup type="single" value={stack} onValueChange={(v)=> v && setStack(v as any)} variant="outline" size="sm" className="mr-1">
+          <ToggleGroup
+            type="single"
+            value={stack}
+            onValueChange={(v) => v && setStack(v as any)}
+            variant="outline"
+            size="sm"
+            className="mr-1"
+          >
             <ToggleGroupItem value="evm">EVM</ToggleGroupItem>
             <ToggleGroupItem value="near">NEAR</ToggleGroupItem>
           </ToggleGroup>
 
-          {stack === 'evm' && (
+          {stack === "evm" && (
             <>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2 max-w-full sm:max-w-[260px] overflow-hidden"><WalletMinimal className="h-4 w-4"/><span className="truncate">{NETWORKS.find(n=>n.key===activeNetworkKey)?.name||'Network'}</span><ChevronDown className="h-4 w-4 opacity-70"/></Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 max-w-full sm:max-w-[260px] overflow-hidden"
+                  >
+                    <WalletMinimal className="h-4 w-4" />
+                    <span className="truncate">
+                      {NETWORKS.find((n) => n.key === activeNetworkKey)?.name ||
+                        "Network"}
+                    </span>
+                    <ChevronDown className="h-4 w-4 opacity-70" />
+                  </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent>
+                <DropdownMenuContent
+                  className="z-100 border border-gray-200 dark:border-gray-700 shadow-xl"
+                  style={{
+                    backgroundColor:
+                      document.documentElement.classList.contains("dark")
+                        ? "rgba(17, 24, 39, 1)" // solid dark gray
+                        : "rgba(255, 255, 255, 1)", // solid white
+                    backdropFilter: "none",
+                    WebkitBackdropFilter: "none",
+                  }}
+                >
                   <DropdownMenuLabel>Networks</DropdownMenuLabel>
-                  {NETWORKS.map((n)=> (
-                    <DropdownMenuItem key={n.key} onClick={()=>selectNetwork(n.key)}>{n.name}</DropdownMenuItem>
+                  {NETWORKS.map((n) => (
+                    <DropdownMenuItem
+                      key={n.key}
+                      onClick={() => selectNetwork(n.key)}
+                    >
+                      {n.name}
+                    </DropdownMenuItem>
                   ))}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem variant="destructive" disabled>Manage networks</DropdownMenuItem>
+                  <DropdownMenuItem variant="destructive" disabled>
+                    Manage networks
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2 max-w-full sm:max-w-[200px] overflow-hidden"><span className="truncate">{accounts[activeAccountIdx]?.label || 'Account'}</span><ChevronDown className="h-4 w-4 opacity-70"/></Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 max-w-full sm:max-w-[200px] overflow-hidden"
+                  >
+                    <span className="truncate">
+                      {accounts[activeAccountIdx]?.label || "Account"}
+                    </span>
+                    <ChevronDown className="h-4 w-4 opacity-70" />
+                  </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
                   <DropdownMenuLabel>Accounts</DropdownMenuLabel>
-                  {accounts.map((a, i)=> (
-                    <DropdownMenuItem key={i} onClick={()=>selectAccount(i)}>{a.label}</DropdownMenuItem>
+                  {accounts.map((a, i) => (
+                    <DropdownMenuItem key={i} onClick={() => selectAccount(i)}>
+                      {a.label}
+                    </DropdownMenuItem>
                   ))}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={createNewAccount}>Create new account</DropdownMenuItem>
+                  <DropdownMenuItem onClick={createNewAccount}>
+                    Create new account
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </>
           )}
 
-          {stack === 'near' && (
-            <div className="text-sm text-muted-foreground">
-              NEAR Mainnet
-            </div>
+          {stack === "near" && (
+            <div className="text-sm text-muted-foreground">NEAR Mainnet</div>
           )}
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
-          <Button variant="outline" size="icon" aria-label="Notifications" onClick={()=>setNotificationsOpen(v=>!v)}><Bell className="h-4 w-4"/></Button>
-          <a href="/help" className="inline-flex"><Button variant="outline" size="sm">Help</Button></a>
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="Notifications"
+            onClick={() => setNotificationsOpen((v) => !v)}
+          >
+            <Bell className="h-4 w-4" />
+          </Button>
+          <a href="/help" className="inline-flex">
+            <Button variant="outline" size="sm">
+              Help
+            </Button>
+          </a>
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="outline" size="sm"><Settings className="mr-2 h-4 w-4"/>Settings</Button>
+              <Button variant="outline" size="sm">
+                <Settings className="mr-2 h-4 w-4" />
+                Settings
+              </Button>
             </SheetTrigger>
-            <SheetContent className="w-full sm:max-w-lg">
+            <SheetContent className="w-full px-4 sm:max-w-lg overflow-y-auto max-h-[90vh]">
               <SheetHeader>
                 <SheetTitle>Configuration</SheetTitle>
               </SheetHeader>
-              <div className="mt-4 space-y-3">
-                <div className="space-y-1">
+              <div className="space-y-5">
+                <div className="space-y-1 sm:space-y-2">
                   <Label>Bundler RPC URL</Label>
-                  <Input value={bundlerUrl} onChange={(e) => setBundlerUrl(e.target.value)} placeholder="https://..." />
+                  <Input
+                    value={bundlerUrl}
+                    onChange={(e) => setBundlerUrl(e.target.value)}
+                    placeholder="https://..."
+                  />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 sm:space-y-2">
                   <Label>EntryPoint Address</Label>
-                  <Input value={entryPoint} onChange={(e) => setEntryPoint(e.target.value)} placeholder="0x..." />
+                  <Input
+                    value={entryPoint}
+                    onChange={(e) => setEntryPoint(e.target.value)}
+                    placeholder="0x..."
+                  />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 sm:space-y-2">
                   <Label>Account Factory Address</Label>
-                  <Input value={accFactory} onChange={(e) => setAccFactory(e.target.value)} placeholder="0x..." />
+                  <Input
+                    value={accFactory}
+                    onChange={(e) => setAccFactory(e.target.value)}
+                    placeholder="0x..."
+                  />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 sm:space-y-2">
                   <Label>Disposable Factory Address</Label>
-                  <Input value={factory} onChange={(e) => setFactory(e.target.value)} placeholder="0x..." />
+                  <Input
+                    value={factory}
+                    onChange={(e) => setFactory(e.target.value)}
+                    placeholder="0x..."
+                  />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 sm:space-y-2">
                   <Label>Chain RPC URL</Label>
-                  <Input value={rpcUrl} onChange={(e) => setRpcUrl(e.target.value)} placeholder="https://..." />
+                  <Input
+                    value={rpcUrl}
+                    onChange={(e) => setRpcUrl(e.target.value)}
+                    placeholder="https://..."
+                  />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 sm:space-y-2">
                   <Label>Sponsorship Policy ID</Label>
-                  <Input value={policyId} onChange={(e) => setPolicyId(e.target.value)} placeholder="sp_..." />
+                  <Input
+                    value={policyId}
+                    onChange={(e) => setPolicyId(e.target.value)}
+                    placeholder="sp_..."
+                  />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 sm:space-y-2">
                   <Label>WalletConnect Project ID</Label>
-                  <Input value={wcProjectId} onChange={(e)=>setWcProjectId(e.target.value)} placeholder="wc_..." />
+                  <Input
+                    value={wcProjectId}
+                    onChange={(e) => setWcProjectId(e.target.value)}
+                    placeholder="wc_..."
+                  />
                 </div>
-                <div className="flex gap-2 pt-2">
-                  <Button className="flex-1" onClick={saveConfig}>Save</Button>
-                  <Button variant="outline" className="flex-1" onClick={resetToServerConfig}>Reset</Button>
+                <div className="flex gap-2 pt-2 sm:space-y-2">
+                  <Button className="flex-1" onClick={saveConfig}>
+                    Save
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={resetToServerConfig}
+                  >
+                    Reset
+                  </Button>
                 </div>
               </div>
             </SheetContent>
@@ -1154,105 +1255,204 @@ export default function Dashboard() {
 
         {stack === 'near' && (
           <>
-            <div className="w-full">
-              <div className="flex items-end justify-between">
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">NEAR Balance</div>
-                  <div className="text-4xl font-semibold tracking-tight">{nearBalance || '0.00'} Ⓝ</div>
-                  <div className="text-xs text-muted-foreground">{nearAccountId || '—'}</div>
-                </div>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button onClick={()=> setOpenNearSend(true)} disabled={Number(nearBalance||'0')<=0} title={Number(nearBalance||'0')>0?'' : 'Fund your account to enable sending.'}>Send NEAR</Button>
-                <Button variant="outline" onClick={()=> setOpenNearReceive(true)}>Receive</Button>
-                <Button variant="outline" onClick={()=>{ if(nearAccountId){ navigator.clipboard.writeText(nearAccountId); try { (toast as any)?.success?.('Account copied'); } catch {} } }}>Copy Account</Button>
-              </div>
-            </div>
+            {!nearAccountId && (
+              <Card className="w-full text-left">
+                <CardHeader><CardTitle>NEAR</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-muted-foreground">Connect your NEAR account or create a new one.</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={handleConnectNear}>Connect NEAR Wallet</Button>
+                    <Button variant="outline" onClick={async()=>{ const cfg = await getNearConfig(); window.open(`${cfg.walletUrl}/create`, '_blank'); }}>Create NEAR Account</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-            <Card className="w-full text-left">
-              <CardHeader><CardTitle>Details</CardTitle></CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex items-center justify-between gap-2"><div className="text-muted-foreground">Account</div><div className="truncate">{nearAccountId || '—'}</div></div>
-                <div className="flex items-center justify-between gap-2"><div className="text-muted-foreground">Public key</div><div className="truncate">{nearPublicKey || '—'}</div></div>
-              </CardContent>
-            </Card>
-
-                <Tabs defaultValue="nearTokens" className="w-full mt-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <TabsList>
-                      <TabsTrigger value="nearTokens">Tokens</TabsTrigger>
-                      <TabsTrigger value="nearNfts">NFTs</TabsTrigger>
-                    </TabsList>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={()=> setOpenNearAddToken(true)}>+ Add FT</Button>
-                      <Button variant="outline" size="sm" onClick={()=> setOpenNearAddNft(true)}>+ Add NFT</Button>
+            {nearAccountId && (
+              <>
+                <div className="w-full">
+                  <div className="flex items-end justify-between">
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">NEAR Balance</div>
+                      <div className="text-4xl font-semibold tracking-tight">{nearBalance || '0.00'} Ⓝ</div>
+                      <div className="text-xs text-muted-foreground">{nearAccountId}</div>
                     </div>
                   </div>
-                  <TabsContent value="nearTokens" className="mt-2">
-                    <Card className="w-full text-left"><CardContent className="space-y-4 pt-6">
-                      <div className="space-y-1">
-                        {nearTokens.length === 0 && (<p className="text-xs text-muted-foreground">No NEAR tokens yet — add from “+ Add FT”.</p>)}
-                        {nearTokens.map(t => (
-                          <div key={t.contractId} className="flex items-center justify-between gap-2 text-sm">
-                            <div className="min-w-0 truncate">{t.symbol} <span className="text-muted-foreground">· {t.name}</span></div>
-                            <div className="shrink-0">{t.balance || '0'}</div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button onClick={()=> setOpenNearSend(true)}>Send NEAR</Button>
+                    <Button variant="outline" onClick={()=>{ navigator.clipboard.writeText(nearAccountId); try { (toast as any)?.success?.('Account copied'); } catch {} }}>Copy Account</Button>
+                    <Button variant="outline" onClick={handleDisconnectNear}>Disconnect</Button>
+                  </div>
+                </div>
+
+                <Card className="w-full text-left">
+                  <CardHeader><CardTitle>Details</CardTitle></CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between gap-2"><div className="text-muted-foreground">Account</div><div className="truncate">{nearAccountId}</div></div>
+                    <div className="flex items-center justify-between gap-2"><div className="text-muted-foreground">Public key</div><div className="truncate">{nearPublicKey || '—'}</div></div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+
+            <Tabs defaultValue="nearTokens" className="w-full mt-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <TabsList>
+                  <TabsTrigger value="nearTokens">Tokens</TabsTrigger>
+                  <TabsTrigger value="nearNfts">NFTs</TabsTrigger>
+                </TabsList>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setOpenNearAddToken(true)}
+                  >
+                    + Add FT
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setOpenNearAddNft(true)}
+                  >
+                    + Add NFT
+                  </Button>
+                </div>
+              </div>
+              <TabsContent value="nearTokens" className="mt-2">
+                <Card className="w-full text-left">
+                  <CardContent className="space-y-4 pt-6">
+                    <div className="space-y-1">
+                      {nearTokens.length === 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          No NEAR tokens yet — add from “+ Add FT”.
+                        </p>
+                      )}
+                      {nearTokens.map((t) => (
+                        <div
+                          key={t.contractId}
+                          className="flex items-center justify-between gap-2 text-sm"
+                        >
+                          <div className="min-w-0 truncate">
+                            {t.symbol}{" "}
+                            <span className="text-muted-foreground">
+                              · {t.name}
+                            </span>
                           </div>
-                        ))}
-                      </div>
-                    </CardContent></Card>
-                  </TabsContent>
-                  <TabsContent value="nearNfts" className="mt-2">
-                    <Card className="w-full text-left"><CardContent className="space-y-4 pt-6">
-                      {nearNftCollections.length === 0 && (<p className="text-xs text-muted-foreground">No NFT collections yet — add from “+ Add NFT”.</p>)}
-                      {nearNftCollections.map(col => (
-                        <div key={col.contractId} className="space-y-2">
-                          <div className="text-sm font-medium">{col.name || col.symbol || col.contractId}</div>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                            {col.items.map((it, i)=> (
-                              <div key={col.contractId+':'+it.token_id+':'+i} className="rounded border p-2 text-xs">
-                                {it.media ? (<img alt={it.title||it.token_id} src={it.media} className="mb-2 h-24 w-full rounded object-cover" />) : null}
-                                <div className="truncate">{it.title || it.token_id}</div>
-                              </div>
-                            ))}
-                            {col.items.length===0 && (<div className="text-xs text-muted-foreground">No tokens in this collection.</div>)}
-                          </div>
+                          <div className="shrink-0">{t.balance || "0"}</div>
                         </div>
                       ))}
-                    </CardContent></Card>
-                  </TabsContent>
-                </Tabs>
-
-                <Dialog open={openNearAddToken} onOpenChange={setOpenNearAddToken}>
-                  <DialogContent>
-                    <DialogHeader><DialogTitle>Add NEAR token (NEP-141)</DialogTitle></DialogHeader>
-                    <div className="space-y-3">
-                      <div className="space-y-1">
-                        <Label>Token contract ID</Label>
-                        <Input value={newNearTokenId} onChange={(e)=>setNewNearTokenId(e.target.value)} placeholder="wrap.near" />
-                      </div>
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" onClick={()=>setOpenNearAddToken(false)}>Cancel</Button>
-                        <Button onClick={addNearToken} disabled={!newNearTokenId.trim()}>Add</Button>
-                      </div>
                     </div>
-                  </DialogContent>
-                </Dialog>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              <TabsContent value="nearNfts" className="mt-2">
+                <Card className="w-full text-left">
+                  <CardContent className="space-y-4 pt-6">
+                    {nearNftCollections.length === 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        No NFT collections yet — add from “+ Add NFT”.
+                      </p>
+                    )}
+                    {nearNftCollections.map((col) => (
+                      <div key={col.contractId} className="space-y-2">
+                        <div className="text-sm font-medium">
+                          {col.name || col.symbol || col.contractId}
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                          {col.items.map((it, i) => (
+                            <div
+                              key={col.contractId + ":" + it.token_id + ":" + i}
+                              className="rounded border p-2 text-xs"
+                            >
+                              {it.media ? (
+                                <img
+                                  alt={it.title || it.token_id}
+                                  src={it.media}
+                                  className="mb-2 h-24 w-full rounded object-cover"
+                                />
+                              ) : null}
+                              <div className="truncate">
+                                {it.title || it.token_id}
+                              </div>
+                            </div>
+                          ))}
+                          {col.items.length === 0 && (
+                            <div className="text-xs text-muted-foreground">
+                              No tokens in this collection.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
 
-                <Dialog open={openNearAddNft} onOpenChange={setOpenNearAddNft}>
-                  <DialogContent>
-                    <DialogHeader><DialogTitle>Add NFT collection (NEP-171)</DialogTitle></DialogHeader>
-                    <div className="space-y-3">
-                      <div className="space-y-1">
-                        <Label>Collection contract ID</Label>
-                        <Input value={newNearNftId} onChange={(e)=>setNewNearNftId(e.target.value)} placeholder="example-nft.near" />
-                      </div>
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" onClick={()=>setOpenNearAddNft(false)}>Cancel</Button>
-                        <Button onClick={addNearNft} disabled={!newNearNftId.trim()}>Add</Button>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
+            <Dialog open={openNearAddToken} onOpenChange={setOpenNearAddToken}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add NEAR token (NEP-141)</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label>Token contract ID</Label>
+                    <Input
+                      value={newNearTokenId}
+                      onChange={(e) => setNewNearTokenId(e.target.value)}
+                      placeholder="wrap.near"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setOpenNearAddToken(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={addNearToken}
+                      disabled={!newNearTokenId.trim()}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={openNearAddNft} onOpenChange={setOpenNearAddNft}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add NFT collection (NEP-171)</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label>Collection contract ID</Label>
+                    <Input
+                      value={newNearNftId}
+                      onChange={(e) => setNewNearNftId(e.target.value)}
+                      placeholder="example-nft.near"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setOpenNearAddNft(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={addNearNft}
+                      disabled={!newNearNftId.trim()}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             <Dialog open={openNearSend} onOpenChange={setOpenNearSend}>
               <DialogContent>
@@ -1262,18 +1462,43 @@ export default function Dashboard() {
                 <div className="space-y-3">
                   <div className="space-y-1">
                     <Label>Receiver (accountId)</Label>
-                    <Input value={nearReceiver} onChange={(e)=>setNearReceiver(e.target.value)} placeholder="alice.near" />
+                    <Input
+                      value={nearReceiver}
+                      onChange={(e) => setNearReceiver(e.target.value)}
+                      placeholder="alice.near"
+                    />
                   </div>
                   <div className="space-y-1">
                     <Label>Amount (NEAR)</Label>
-                    <Input value={nearAmount} onChange={(e)=>setNearAmount(e.target.value)} placeholder="0.00" />
+                    <Input
+                      value={nearAmount}
+                      onChange={(e) => setNearAmount(e.target.value)}
+                      placeholder="0.00"
+                    />
                   </div>
                   <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={()=>setOpenNearSend(false)}>Cancel</Button>
-                    <Button onClick={sendNearFlow} disabled={!nearReceiver || !nearAmount}>Send</Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setOpenNearSend(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={sendNearFlow}
+                      disabled={!nearReceiver || !nearAmount}
+                    >
+                      Send
+                    </Button>
                   </div>
                   {nearTxHash && (
-                    <a className="text-primary underline text-sm" href={explorerTxUrl(nearTxHash)} target="_blank" rel="noreferrer">View on NEAR Explorer ↗</a>
+                    <a
+                      className="text-primary underline text-sm"
+                      href={explorerTxUrl(nearTxHash)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      View on NEAR Explorer ↗
+                    </a>
                   )}
                 </div>
               </DialogContent>
@@ -1299,13 +1524,18 @@ export default function Dashboard() {
           </>
         )}
 
-        {stack === 'evm' && (
+        {stack === "evm" && (
           <>
             {!accountAddr && (
               <Card className="w-full text-left">
-                <CardHeader><CardTitle>Welcome</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle>Welcome</CardTitle>
+                </CardHeader>
                 <CardContent className="space-y-3">
-                  <p className="text-sm text-muted-foreground">Create your seedless smart wallet in one tap. No seed phrases.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Create your seedless smart wallet in one tap. No seed
+                    phrases.
+                  </p>
                   <Button onClick={createWallet}>Create Seedless Wallet</Button>
                 </CardContent>
               </Card>
@@ -1317,42 +1547,113 @@ export default function Dashboard() {
                   <div className="flex items-end justify-between">
                     <div className="space-y-1">
                       <div className="text-xs text-muted-foreground">Total</div>
-                      <div className="text-4xl font-semibold tracking-tight">US ${((Number(balance||0) * usdPrice) || 0).toFixed(2)}</div>
-                      <div className="text-xs text-muted-foreground">{balance||'0.00'} ETH</div>
+                      <div className="text-4xl font-semibold tracking-tight">
+                        US ${(Number(balance || 0) * usdPrice || 0).toFixed(2)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {balance || "0.00"} ETH
+                      </div>
                     </div>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <Button onClick={() => { setOpenTransfer(true); setStep(1); }}>Send</Button>
-                    <Button variant="outline" onClick={()=>setOpenReceive(true)}>Receive</Button>
-                    <Button variant="outline" onClick={createDisposableKey}>Disposable Key</Button>
-                    <Button variant="outline" onClick={()=> { try { (toast as any)?.info?.('Funding coming soon'); } catch {} }}>Fund wallet</Button>
-                    <Button variant="outline" onClick={()=> { try { (toast as any)?.info?.('Swap coming soon'); } catch {} }}>Swap</Button>
-                    <Button variant="outline" onClick={()=> setOpenWc(true)}>Connect dApp</Button>
+                    <Button
+                      onClick={() => {
+                        setOpenTransfer(true);
+                        setStep(1);
+                      }}
+                    >
+                      Send
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setOpenReceive(true)}
+                    >
+                      Receive
+                    </Button>
+                    <Button variant="outline" onClick={createDisposableKey}>
+                      Disposable Key
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        try {
+                          (toast as any)?.info?.("Funding coming soon");
+                        } catch {}
+                      }}
+                    >
+                      Fund wallet
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        try {
+                          (toast as any)?.info?.("Swap coming soon");
+                        } catch {}
+                      }}
+                    >
+                      Swap
+                    </Button>
+                    <Button variant="outline" onClick={() => setOpenWc(true)}>
+                      Connect dApp
+                    </Button>
                   </div>
                 </div>
 
                 <Tabs defaultValue="tokens" className="w-full">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <TabsList>
-                      <TabsTrigger value="tokens">Tokens</TabsTrigger>
-                      <TabsTrigger value="defi">DeFi</TabsTrigger>
-                      <TabsTrigger value="nfts">NFTs</TabsTrigger>
+                    <TabsList className="p-3">
+                      <TabsTrigger value="tokens" className="text-xl py-3">
+                        Tokens
+                      </TabsTrigger>
+                      <TabsTrigger value="defi" className="text-xl py-3">
+                        DeFi
+                      </TabsTrigger>
+                      <TabsTrigger value="nfts" className="text-xl py-3">
+                        NFTs
+                      </TabsTrigger>
                     </TabsList>
-                    <Button variant="outline" size="sm" onClick={()=>{ setAddMode("search"); setAddNetKey(activeNetworkKey); setOpenAddToken(true); }}>+ Add</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setAddMode("search");
+                        setAddNetKey(activeNetworkKey);
+                        setOpenAddToken(true);
+                      }}
+                    >
+                      + Add
+                    </Button>
                   </div>
                   <TabsContent value="tokens" className="mt-2">
                     <Card className="w-full text-left">
                       <CardContent className="space-y-4 pt-6">
                         <div className="space-y-1">
                           <div className="flex items-center justify-between gap-2 text-sm">
-                            <div className="min-w-0 truncate">ETH <span className="text-muted-foreground">· Ether</span></div>
-                            <div className="shrink-0">{balance || '0'}</div>
+                            <div className="min-w-0 truncate">
+                              ETH{" "}
+                              <span className="text-muted-foreground">
+                                · Ether
+                              </span>
+                            </div>
+                            <div className="shrink-0">{balance || "0"}</div>
                           </div>
-                          {tokens.length === 0 && (<p className="text-xs text-muted-foreground">No tokens yet — add from “+ Add”.</p>)}
-                          {tokens.map(t => (
-                            <div key={t.address} className="flex items-center justify-between gap-2 text-sm">
-                              <div className="min-w-0 truncate">{t.symbol} <span className="text-muted-foreground">· {t.name}</span></div>
-                              <div className="shrink-0">{t.balance || '0'}</div>
+                          {tokens.length === 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              No tokens yet — add from “+ Add”.
+                            </p>
+                          )}
+                          {tokens.map((t) => (
+                            <div
+                              key={t.address}
+                              className="flex items-center justify-between gap-2 text-sm"
+                            >
+                              <div className="min-w-0 truncate">
+                                {t.symbol}{" "}
+                                <span className="text-muted-foreground">
+                                  · {t.name}
+                                </span>
+                              </div>
+                              <div className="shrink-0">{t.balance || "0"}</div>
                             </div>
                           ))}
                         </div>
@@ -1360,58 +1661,135 @@ export default function Dashboard() {
                     </Card>
                   </TabsContent>
                   <TabsContent value="defi" className="mt-2">
-                    <Card><CardContent className="pt-6 text-sm text-muted-foreground">DeFi coming soon.</CardContent></Card>
+                    <Card>
+                      <CardContent className="pt-6 text-sm text-muted-foreground">
+                        DeFi coming soon.
+                      </CardContent>
+                    </Card>
                   </TabsContent>
                   <TabsContent value="nfts" className="mt-2">
-                    <Card><CardContent className="pt-6 text-sm text-muted-foreground">NFTs coming soon.</CardContent></Card>
+                    <Card>
+                      <CardContent className="pt-6 text-sm text-muted-foreground">
+                        NFTs coming soon.
+                      </CardContent>
+                    </Card>
                   </TabsContent>
                 </Tabs>
 
                 <Card className="w-full max-w-6xl text-left">
-                  <CardHeader><CardTitle>Recovery</CardTitle></CardHeader>
-                  <CardContent className="space-y-3">
-                    <p className="text-sm text-muted-foreground">Replace seed phrases with a simple Recovery Kit. Use a Recovery Code or Passkey.</p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button onClick={createRecoveryBackup}>Create Recovery Kit</Button>
-                      <Button variant="outline" onClick={createPasskeyRecoveryKit}>Create Passkey Kit</Button>
-                      <Button variant="outline" onClick={async()=>{
-                        try{
-                          if (!lastBackup) { try { (toast as any)?.info?.('Create a Recovery Kit first'); } catch {} return; }
-                          const { saveToDriveOrFallback } = await import('./lib/drive');
-                          await saveToDriveOrFallback(lastBackup.fileName, lastBackup.blob);
-                        }catch(e:any){ try { (toast as any)?.error?.('Could not open Drive'); } catch {} }
-                      }}>Save to Google Drive</Button>
+                  <CardHeader>
+                    <CardTitle>Recovery</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      Replace seed phrases with a simple Recovery Kit. Use a
+                      Recovery Code or Passkey.
+                    </p>
+                    <div className="flex flex-col items-center gap-2 sm:flex-wrap sm:flex-row">
+                      <Button onClick={createRecoveryBackup}>
+                        Create Recovery Kit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={createPasskeyRecoveryKit}
+                      >
+                        Create Passkey Kit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            if (!lastBackup) {
+                              try {
+                                (toast as any)?.info?.(
+                                  "Create a Recovery Kit first"
+                                );
+                              } catch {}
+                              return;
+                            }
+                            const { saveToDriveOrFallback } = await import(
+                              "./lib/drive"
+                            );
+                            await saveToDriveOrFallback(
+                              lastBackup.fileName,
+                              lastBackup.blob
+                            );
+                          } catch (e: any) {
+                            try {
+                              (toast as any)?.error?.("Could not open Drive");
+                            } catch {}
+                          }
+                        }}
+                      >
+                        Save to Google Drive
+                      </Button>
                       {recoveryCode && (
-                        <span className="text-xs">Your Recovery Code: <span className="font-mono">{recoveryCode}</span> — store it safely.</span>
+                        <span className="text-xs space-y-2">
+                          Your Recovery Code:{" "}
+                          <span className="font-mono">{recoveryCode}</span> ➡
+                          (store it safely ⚠️.)
+                        </span>
                       )}
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-1">
+                    <div className="grid gap-3 sm:grid-cols-2 py-10">
+                      <div className="space-y-2">
                         <Label>Recovery Code</Label>
-                        <Input value={restoreCode} onChange={(e)=>setRestoreCode(e.target.value)} placeholder="XXXX-XXXX-XXXX-XXXX" />
+                        <Input
+                          value={restoreCode}
+                          onChange={(e) => setRestoreCode(e.target.value)}
+                          placeholder="XXXX-XXXX-XXXX-XXXX"
+                        />
                       </div>
                       <div className="space-y-1">
                         <Label>Recovery file (.json)</Label>
-                        <Input type="file" accept="application/json" onChange={async (e)=>{
-                          const f = e.target.files?.[0];
-                          if (!f) return; const txt = await f.text(); setRestoreFile(txt);
-                        }} />
+                        <Input
+                          type="file"
+                          accept="application/json"
+                          onChange={async (e) => {
+                            const f = e.target.files?.[0];
+                            if (!f) return;
+                            const txt = await f.text();
+                            setRestoreFile(txt);
+                          }}
+                        />
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" onClick={restoreFromBackup}>Restore Owner Key</Button>
-                      <Button variant="outline" onClick={async()=>{ if(!restoreFile){ try { (toast as any)?.info?.('Select a passkey file'); } catch {} return; } await restoreWithPasskey(restoreFile); }}>Restore with Passkey</Button>
+                    <div className="flex gap-2 py-5">
+                      <Button
+                        variant="outline"
+                        className="px-2"
+                        onClick={restoreFromBackup}
+                      >
+                        Restore Owner Key
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="px-2"
+                        onClick={async () => {
+                          if (!restoreFile) {
+                            try {
+                              (toast as any)?.info?.("Select a passkey file");
+                            } catch {}
+                            return;
+                          }
+                          await restoreWithPasskey(restoreFile);
+                        }}
+                      >
+                        Restore with Passkey
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
 
                 <Card className="w-full max-w-6xl text-left">
-                  <CardHeader><CardTitle>History</CardTitle></CardHeader>
+                  <CardHeader>
+                    <CardTitle>History</CardTitle>
+                  </CardHeader>
                   <CardContent className="space-y-2">
                     {history.length === 0 && (<p className="text-xs text-muted-foreground">No activity yet.</p>)}
                     {history.slice().reverse().map((h, i) => (
                       <div key={i} className="flex items-center justify-between gap-2 text-sm">
-                        <div className="min-w-0 truncate">{new Date(h.time).toLocaleString()} · <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs">{h.chain || 'EVM'}</span> · {h.kind} · {h.details}</div>
+                        <div className="min-w-0 truncate">{new Date(h.time).toLocaleString()} · {h.kind} · {h.details}</div>
                         <div className="shrink-0 text-muted-foreground">{h.status || '—'}{h.txHash ? ` · ${h.txHash.slice(0,6)}…${h.txHash.slice(-4)}` : ''}</div>
                       </div>
                     ))}
@@ -1423,14 +1801,32 @@ export default function Dashboard() {
         )}
 
         <Card className="w-full max-w-6xl text-left">
-          <CardHeader><CardTitle>Status</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>Status</CardTitle>
+          </CardHeader>
           <CardContent className="space-y-2">
-            <pre className="whitespace-pre-wrap text-xs text-muted-foreground">{status || 'Ready.'}</pre>
+            <pre className="whitespace-pre-wrap text-xs text-muted-foreground">
+              {status || "Ready."}
+            </pre>
             {txHash && (
-              <a className="text-primary underline" href={`https://sepolia.arbiscan.io/tx/${txHash}`} target="_blank" rel="noreferrer">View on Arbiscan ↗</a>
+              <a
+                className="text-primary underline"
+                href={`https://sepolia.arbiscan.io/tx/${txHash}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                View on Arbiscan ↗
+              </a>
             )}
             {nearTxHash && (
-              <a className="text-primary underline" href={nearTxHash ? explorerTxUrl(nearTxHash) : '#'} target="_blank" rel="noreferrer">View on NEAR Explorer ↗</a>
+              <a
+                className="text-primary underline"
+                href={nearTxHash ? explorerTxUrl(nearTxHash) : "#"}
+                target="_blank"
+                rel="noreferrer"
+              >
+                View on NEAR Explorer ↗
+              </a>
             )}
           </CardContent>
         </Card>
@@ -1438,29 +1834,45 @@ export default function Dashboard() {
         <Dialog open={openTransfer} onOpenChange={setOpenTransfer}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{step === 1 ? "New Transfer" : "Review & Send"}</DialogTitle>
+              <DialogTitle className="dark:text-foreground">
+                {step === 1 ? "New Transfer" : "Review & Send"}
+              </DialogTitle>
             </DialogHeader>
             {step === 1 ? (
               <div className="space-y-3">
                 <div className="space-y-1">
                   <Label>Recipient address</Label>
-                  <Input value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="0x..." />
+                  <Input
+                    value={recipient}
+                    onChange={(e) => setRecipient(e.target.value)}
+                    placeholder="0x..."
+                  />
                 </div>
                 <div className="space-y-1">
                   <Label>Amount (ETH)</Label>
-                  <Input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+                  <Input
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="0.00"
+                  />
                 </div>
                 <div className="flex justify-end">
-                  <Button onClick={() => setStep(2)} disabled={!recipient}>Continue</Button>
+                  <Button onClick={() => setStep(2)} disabled={!recipient}>
+                    Continue
+                  </Button>
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  This will create a one‑time wallet, send {amount || "0"} ETH to {recipient.slice(0,6)}…{recipient.slice(-4)}, and burn the wallet immediately after.
+                  This will create a one‑time wallet, send {amount || "0"} ETH
+                  to {recipient.slice(0, 6)}…{recipient.slice(-4)}, and burn the
+                  wallet immediately after.
                 </p>
                 <div className="flex justify-between gap-2">
-                  <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
+                  <Button variant="outline" onClick={() => setStep(1)}>
+                    Back
+                  </Button>
                   <Button onClick={sendDisposableTx}>Send</Button>
                 </div>
               </div>
@@ -1471,16 +1883,34 @@ export default function Dashboard() {
         <Dialog open={openReceive} onOpenChange={setOpenReceive}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Receive</DialogTitle>
+              <DialogTitle className="dark:text-foreground">
+                Receive
+              </DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">Share your address or scan the QR to receive funds on this network.</p>
+              <p className="text-sm text-muted-foreground">
+                Share your address or scan the QR to receive funds on this
+                network.
+              </p>
               <div className="flex items-center justify-center">
-                <img alt="QR" src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${accountAddr || ''}`} className="rounded bg-white p-2" />
+                <img
+                  alt="QR"
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${
+                    accountAddr || ""
+                  }`}
+                  className="rounded bg-white p-2"
+                />
               </div>
               <div className="flex items-center gap-2">
-                <Input readOnly value={accountAddr || ''} />
-                <Button variant="outline" onClick={()=>{ if(accountAddr) navigator.clipboard.writeText(accountAddr); }}>Copy</Button>
+                <Input readOnly value={accountAddr || ""} />
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (accountAddr) navigator.clipboard.writeText(accountAddr);
+                  }}
+                >
+                  Copy
+                </Button>
               </div>
             </div>
           </DialogContent>
@@ -1491,57 +1921,138 @@ export default function Dashboard() {
             <DialogHeader>
               <DialogTitle>Add token</DialogTitle>
             </DialogHeader>
-            <Tabs defaultValue={addMode} onValueChange={(v)=> setAddMode(v as any)} className="w-full">
+            <Tabs
+              defaultValue={addMode}
+              onValueChange={(v) => setAddMode(v as any)}
+              className="w-full"
+            >
               <TabsList>
                 <TabsTrigger value="search">Search</TabsTrigger>
                 <TabsTrigger value="custom">Custom</TabsTrigger>
               </TabsList>
               <div className="mt-2 space-y-3">
-                <div>
+                <div className="space-y-3">
                   <Label>Network</Label>
                   <Select value={addNetKey} onValueChange={setAddNetKey}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Select network" /></SelectTrigger>
-                    <SelectContent>
-                      {NETWORKS.map(n=> (
-                        <SelectItem key={n.key} value={n.key}>{n.name}</SelectItem>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select network" />
+                    </SelectTrigger>
+                    <SelectContent className="z-100 bg-white dark:bg-gray-900 backdrop-blur-none bg-opacity-100 border border-gray-200 dark:border-gray-700 shadow-xl">
+                      {NETWORKS.map((n) => (
+                        <SelectItem key={n.key} value={n.key}>
+                          {n.name}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
 
-                {addMode === 'search' ? (
+                {addMode === "search" ? (
                   <div className="space-y-3">
-                    <div>
+                    <div className="space-y-3">
                       <Label>Search tokens</Label>
-                      <Input value={tokenQuery} onChange={(e)=>setTokenQuery(e.target.value)} placeholder="Search by name or symbol" />
+                      <Input
+                        value={tokenQuery}
+                        onChange={(e) => setTokenQuery(e.target.value)}
+                        placeholder="Search by name or symbol"
+                      />
                     </div>
                     <div className="max-h-60 overflow-auto rounded border">
                       {(() => {
-                        const cid = String(NETWORKS.find(n=>n.key===addNetKey)?.chainId || '');
-                        const list = (tokenIndex[cid] || KNOWN_TOKENS[cid] || []) as KnownToken[];
+                        const cid = String(
+                          NETWORKS.find((n) => n.key === addNetKey)?.chainId ||
+                            ""
+                        );
+                        const list = (tokenIndex[cid] ||
+                          KNOWN_TOKENS[cid] ||
+                          []) as KnownToken[];
                         return list
-                          .filter(t=> (t.symbol+t.name).toLowerCase().includes(tokenQuery.toLowerCase()))
-                          .slice(0,100)
-                          .map(t=> (
-                            <div key={t.address} className="flex items-center justify-between gap-2 border-b px-3 py-2 text-sm last:border-b-0">
-                              <div className="min-w-0 truncate">{t.symbol || 'Token'} <span className="text-muted-foreground">· {t.name || ''}</span></div>
-                              <Button size="sm" onClick={()=>{ const targetCid = NETWORKS.find(n=>n.key===addNetKey)?.chainId; addTokenAddressToList(t.address, targetCid); if (String(targetCid)===String(chainId)) { refreshTokens(); try { (toast as any)?.success?.('Token added'); } catch {} } else { try { (toast as any)?.success?.('Token added to ' + (NETWORKS.find(n=>n.key===addNetKey)?.name||'network'), { description: 'Switch network to view.' }); } catch {} } setOpenAddToken(false); }}>Add</Button>
+                          .filter((t) =>
+                            (t.symbol + t.name)
+                              .toLowerCase()
+                              .includes(tokenQuery.toLowerCase())
+                          )
+                          .slice(0, 100)
+                          .map((t) => (
+                            <div
+                              key={t.address}
+                              className="flex items-center justify-between gap-2 border-b px-3 py-2 text-sm last:border-b-0"
+                            >
+                              <div className="min-w-0 truncate">
+                                {t.symbol || "Token"}{" "}
+                                <span className="text-muted-foreground">
+                                  · {t.name || ""}
+                                </span>
+                              </div>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  const targetCid = NETWORKS.find(
+                                    (n) => n.key === addNetKey
+                                  )?.chainId;
+                                  addTokenAddressToList(t.address, targetCid);
+                                  if (String(targetCid) === String(chainId)) {
+                                    refreshTokens();
+                                    try {
+                                      (toast as any)?.success?.("Token added");
+                                    } catch {}
+                                  } else {
+                                    try {
+                                      (toast as any)?.success?.(
+                                        "Token added to " +
+                                          (NETWORKS.find(
+                                            (n) => n.key === addNetKey
+                                          )?.name || "network"),
+                                        {
+                                          description:
+                                            "Switch network to view.",
+                                        }
+                                      );
+                                    } catch {}
+                                  }
+                                  setOpenAddToken(false);
+                                }}
+                              >
+                                Add
+                              </Button>
                             </div>
                           ));
                       })()}
-                      {(() => { const cid = String(NETWORKS.find(n=>n.key===addNetKey)?.chainId || ''); const list = (tokenIndex[cid] || KNOWN_TOKENS[cid] || []) as KnownToken[]; return list.length===0; })() && (
-                        <div className="p-3 text-xs text-muted-foreground">No indexed tokens for this network yet.</div>
+                      {(() => {
+                        const cid = String(
+                          NETWORKS.find((n) => n.key === addNetKey)?.chainId ||
+                            ""
+                        );
+                        const list = (tokenIndex[cid] ||
+                          KNOWN_TOKENS[cid] ||
+                          []) as KnownToken[];
+                        return list.length === 0;
+                      })() && (
+                        <div className="p-3 text-xs text-muted-foreground">
+                          No indexed tokens for this network yet.
+                        </div>
                       )}
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <div>
+                    <div className="space-y-3">
                       <Label>Token contract address</Label>
-                      <Input value={newTokenAddr} onChange={(e)=>setNewTokenAddr(e.target.value)} placeholder="0x..." />
+                      <Input
+                        value={newTokenAddr}
+                        onChange={(e) => setNewTokenAddr(e.target.value)}
+                        placeholder="0x..."
+                      />
                     </div>
-                    <div className="flex justify-end">
-                      <Button onClick={async()=>{ await addToken(); setOpenAddToken(false); }}>Add custom token</Button>
+                    <div className="flex justify-end space-y-3">
+                      <Button
+                        onClick={async () => {
+                          await addToken();
+                          setOpenAddToken(false);
+                        }}
+                      >
+                        Add custom token
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -1555,24 +2066,58 @@ export default function Dashboard() {
               <DialogTitle>Disposable dApp Key</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">Temporary private key for connecting to dApps. It is kept only in memory and will be destroyed when you end the session.</p>
+              <p className="text-sm text-muted-foreground">
+                Temporary private key for connecting to dApps. It is kept only
+                in memory and will be destroyed when you end the session.
+              </p>
               <div className="space-y-1">
                 <Label>Address</Label>
                 <div className="flex items-center gap-2">
-                  <Input readOnly value={disposable?.address || ''} />
-                  <Button variant="outline" onClick={()=>{ if(disposable?.address){ navigator.clipboard.writeText(disposable.address); try { (toast as any)?.success?.('Address copied'); } catch {} } }}>Copy</Button>
+                  <Input readOnly value={disposable?.address || ""} />
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (disposable?.address) {
+                        navigator.clipboard.writeText(disposable.address);
+                        try {
+                          (toast as any)?.success?.("Address copied");
+                        } catch {}
+                      }
+                    }}
+                  >
+                    Copy
+                  </Button>
                 </div>
               </div>
               <div className="space-y-1">
                 <Label>Private key</Label>
                 <div className="flex items-center gap-2">
-                  <Input readOnly value={disposable?.privateKey || ''} />
-                  <Button variant="outline" onClick={()=>{ if(disposable?.privateKey){ navigator.clipboard.writeText(disposable.privateKey); try { (toast as any)?.success?.('Private key copied'); } catch {} } }}>Copy</Button>
+                  <Input readOnly value={disposable?.privateKey || ""} />
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (disposable?.privateKey) {
+                        navigator.clipboard.writeText(disposable.privateKey);
+                        try {
+                          (toast as any)?.success?.("Private key copied");
+                        } catch {}
+                      }
+                    }}
+                  >
+                    Copy
+                  </Button>
                 </div>
               </div>
               <div className="flex justify-between gap-2">
-                <Button variant="outline" onClick={()=>setOpenDisposable(false)}>Close</Button>
-                <Button variant="destructive" onClick={endDisposableSession}>End session</Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setOpenDisposable(false)}
+                >
+                  Close
+                </Button>
+                <Button variant="destructive" onClick={endDisposableSession}>
+                  End session
+                </Button>
               </div>
             </div>
           </DialogContent>
@@ -1586,19 +2131,36 @@ export default function Dashboard() {
             <div className="space-y-3">
               {!wcProposal && !wcSession && (
                 <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">Paste a WalletConnect URI from the dApp to pair.</p>
-                  <Input value={wcUri} onChange={(e)=>setWcUri(e.target.value)} placeholder="wc:..." />
+                  <p className="text-sm text-muted-foreground">
+                    Paste a WalletConnect URI from the dApp to pair.
+                  </p>
+                  <Input
+                    value={wcUri}
+                    onChange={(e) => setWcUri(e.target.value)}
+                    placeholder="wc:..."
+                  />
                   <div className="flex justify-end">
-                    <Button onClick={wcPair} disabled={!wcUri}>Pair</Button>
+                    <Button onClick={wcPair} disabled={!wcUri}>
+                      Pair
+                    </Button>
                   </div>
                 </div>
               )}
               {wcProposal && (
                 <div className="space-y-3">
-                  <div className="text-sm">Session proposal from <span className="font-medium">{wcProposal?.params?.proposer?.metadata?.name || 'App'}</span></div>
+                  <div className="text-sm">
+                    Session proposal from{" "}
+                    <span className="font-medium">
+                      {wcProposal?.params?.proposer?.metadata?.name || "App"}
+                    </span>
+                  </div>
                   <div className="flex justify-between gap-2">
-                    <Button variant="outline" onClick={wcReject}>Reject</Button>
-                    <Button onClick={wcApprove} disabled={!disposable}>Approve with disposable key</Button>
+                    <Button variant="outline" onClick={wcReject}>
+                      Reject
+                    </Button>
+                    <Button onClick={wcApprove} disabled={!disposable}>
+                      Approve with disposable key
+                    </Button>
                   </div>
                 </div>
               )}
@@ -1606,8 +2168,23 @@ export default function Dashboard() {
                 <div className="space-y-3">
                   <div className="text-sm">Connected. {wcStatus}</div>
                   <div className="flex justify-between gap-2">
-                    <Button variant="outline" onClick={()=>setOpenWc(false)}>Close</Button>
-                    <Button variant="destructive" onClick={async()=>{ await wcDisconnect(); endDisposableSession(); try{ (toast as any)?.success?.('Disconnected and key destroyed'); }catch{} }}>Disconnect</Button>
+                    <Button variant="outline" onClick={() => setOpenWc(false)}>
+                      Close
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={async () => {
+                        await wcDisconnect();
+                        endDisposableSession();
+                        try {
+                          (toast as any)?.success?.(
+                            "Disconnected and key destroyed"
+                          );
+                        } catch {}
+                      }}
+                    >
+                      Disconnect
+                    </Button>
                   </div>
                 </div>
               )}
@@ -1617,10 +2194,48 @@ export default function Dashboard() {
 
         <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-2">
-            <Button aria-label="Home" variant="ghost" size="sm" className="flex-1 justify-center gap-2"><HomeIcon className="h-4 w-4"/>Home</Button>
-            <Button aria-label="Browser" variant="ghost" size="sm" className="flex-1 justify-center gap-2"><Compass className="h-4 w-4"/>Browser</Button>
-            <Button aria-label="Activity" variant="ghost" size="sm" className="flex-1 justify-center gap-2"><ActivitySquare className="h-4 w-4"/>Activity</Button>
-            <Button aria-label="Settings" variant="ghost" size="sm" className="flex-1 justify-center gap-2" onClick={()=>document.querySelector('[data-slot=sheet-trigger]')?.dispatchEvent(new Event('click',{bubbles:true}))}><Settings className="h-4 w-4"/>Settings</Button>
+            <Button
+              aria-label="Home"
+              variant="ghost"
+              size="sm"
+              className="flex-1 justify-center gap-2"
+              onClick={() => nav("/")}
+            >
+              <HomeIcon className="h-4 w-4" />
+              Home
+            </Button>
+            <Button
+              aria-label="Browser"
+              variant="ghost"
+              size="sm"
+              className="flex-1 justify-center gap-2"
+            >
+              <Compass className="h-4 w-4" />
+              Browser
+            </Button>
+            <Button
+              aria-label="Activity"
+              variant="ghost"
+              size="sm"
+              className="flex-1 justify-center gap-2"
+            >
+              <ActivitySquare className="h-4 w-4" />
+              Activity
+            </Button>
+            <Button
+              aria-label="Settings"
+              variant="ghost"
+              size="sm"
+              className="flex-1 justify-center gap-2"
+              onClick={() =>
+                document
+                  .querySelector("[data-slot=sheet-trigger]")
+                  ?.dispatchEvent(new Event("click", { bubbles: true }))
+              }
+            >
+              <Settings className="h-4 w-4" />
+              Settings
+            </Button>
           </div>
         </nav>
         <Toaster richColors position="top-center" />
