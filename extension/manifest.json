@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "Cipher Wallet — Seedless",
+  "version": "0.1.0",
+  "description": "Seedless smart wallet with EVM + NEAR, disposable accounts, and unified activity.",
+  "action": {
+    "default_title": "Cipher Wallet — Seedless",
+    "default_popup": "src/popup/index.html"
+  },
+  "options_page": "src/options/index.html",
+  "icons": {
+    "16": "assets/icons/icon-16.png",
+    "32": "assets/icons/icon-32.png",
+    "48": "assets/icons/icon-48.png",
+    "128": "assets/icons/icon-128.png",
+    "256": "assets/icons/icon-256.png"
+  },
+  "permissions": [
+    "storage",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "src/background/index.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/index.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/inject/ethereum.js",
+        "src/inject/near.js"
+      ],
+      "matches": ["<all_urls>"]
+    },
+    {
+      "resources": [
+        "assets/config.json"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
