@@ -1253,7 +1253,7 @@ export default function Dashboard() {
 
       <main className="mx-auto flex w-full max-w-6xl flex-col items-center gap-6 px-4 pb-28">
 
-       
+        {stack === 'near' && (
           <>
             {!nearAccountId && (
               <Card className="w-full text-left">
@@ -1286,22 +1286,15 @@ export default function Dashboard() {
                 </div>
 
                 <Card className="w-full text-left">
-                  <CardHeader>
-                    <CardTitle>Details</CardTitle>
-                  </CardHeader>
+                  <CardHeader><CardTitle>Details</CardTitle></CardHeader>
                   <CardContent className="space-y-2 text-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-muted-foreground">Account</div>
-                      <div className="truncate">{nearAccountId}</div>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-muted-foreground">Public key</div>
-                      <div className="truncate">{nearPublicKey || "—"}</div>
-                    </div>
+                    <div className="flex items-center justify-between gap-2"><div className="text-muted-foreground">Account</div><div className="truncate">{nearAccountId}</div></div>
+                    <div className="flex items-center justify-between gap-2"><div className="text-muted-foreground">Public key</div><div className="truncate">{nearPublicKey || '—'}</div></div>
                   </CardContent>
                 </Card>
               </>
             )}
+
 
             <Tabs defaultValue="nearTokens" className="w-full mt-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1793,33 +1786,13 @@ export default function Dashboard() {
                     <CardTitle>History</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    {history.length === 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        No activity yet.
-                      </p>
-                    )}
-                    {history
-                      .slice()
-                      .reverse()
-                      .map((h, i) => (
-                        <div
-                          key={i}
-                          className="flex items-center justify-between gap-2 text-sm"
-                        >
-                          <div className="min-w-0 truncate">
-                            {new Date(h.time).toLocaleString()} · {h.kind} ·{" "}
-                            {h.details}
-                          </div>
-                          <div className="shrink-0 text-muted-foreground">
-                            {h.status || "—"}
-                            {h.txHash
-                              ? ` · ${h.txHash.slice(0, 6)}…${h.txHash.slice(
-                                  -4
-                                )}`
-                              : ""}
-                          </div>
-                        </div>
-                      ))}
+                    {history.length === 0 && (<p className="text-xs text-muted-foreground">No activity yet.</p>)}
+                    {history.slice().reverse().map((h, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 text-sm">
+                        <div className="min-w-0 truncate">{new Date(h.time).toLocaleString()} · {h.kind} · {h.details}</div>
+                        <div className="shrink-0 text-muted-foreground">{h.status || '—'}{h.txHash ? ` · ${h.txHash.slice(0,6)}…${h.txHash.slice(-4)}` : ''}</div>
+                      </div>
+                    ))}
                   </CardContent>
                 </Card>
               </>
