@@ -27,6 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Web3Wallet } from "@walletconnect/web3wallet";
 import { Core } from "@walletconnect/core";
 import { getSdkError } from "@walletconnect/utils";
@@ -124,13 +125,38 @@ export default function Dashboard() {
   const [restoreFile, setRestoreFile] = useState<string>("");
 
   const rpc = useMemo(() => rpcUrl || bundlerUrl || "", [rpcUrl, bundlerUrl]);
+  
+  type EvmNet = {
+    key: string;
+    name: string;
+    chainId: number;
+    rpcUrl: string;
+    bundlerUrl: string;
+    entryPoint: string;
+    accountFactory: string;
+    disposableFactory: string;
+    policyId: string;
+    assetId: string;
+    isTestnet: boolean;
+  };
 
-  const NETWORKS = [
-    { key: "arbitrum-one", name: "Arbitrum One", chainId: 42161, rpcUrl: "https://arb1.arbitrum.io/rpc", bundlerUrl: "", entryPoint: entryPoint, accountFactory: accFactory, disposableFactory: factory, policyId: policyId, assetId: "ethereum" },
-    { key: "arbitrum-sepolia", name: "Arbitrum Sepolia", chainId: 421614, rpcUrl: "https://sepolia-rollup.arbitrum.io/rpc", bundlerUrl: bundlerUrl, entryPoint: entryPoint, accountFactory: accFactory, disposableFactory: factory, policyId: policyId, assetId: "ethereum" },
-    { key: "ethereum", name: "Ethereum", chainId: 1, rpcUrl: "https://eth.llamarpc.com", bundlerUrl: "", entryPoint: "", accountFactory: "", disposableFactory: "", policyId: "", assetId: "ethereum" },
-    { key: "avalanche", name: "Avalanche", chainId: 43114, rpcUrl: "https://api.avax.network/ext/bc/C/rpc", bundlerUrl: "", entryPoint: "", accountFactory: "", disposableFactory: "", policyId: "", assetId: "avalanche-2" },
-  ];
+  const [evmNetOverrides, setEvmNetOverrides] = useState<Record<string, Partial<EvmNet>>>({});
+  const [netFilter, setNetFilter] = useState<"mainnet" | "testnet">(() => {
+    const v = (localStorage.getItem("evm:netFilter") as any) || "mainnet";
+    return v === "testnet" ? "testnet" : "mainnet";
+  });
+  useEffect(() => { localStorage.setItem("evm:netFilter", netFilter); }, [netFilter]);
+
+  const NETWORKS = useMemo<EvmNet[]>(() => {
+    const base: EvmNet[] = [
+      { key: "arbitrum-one", name: "Arbitrum One", chainId: 42161, rpcUrl: "https://arb1.arbitrum.io/rpc", bundlerUrl: "", entryPoint: entryPoint, accountFactory: accFactory, disposableFactory: factory, policyId: policyId, assetId: "ethereum", isTestnet: false },
+      { key: "arbitrum-sepolia", name: "Arbitrum Sepolia", chainId: 421614, rpcUrl: "https://sepolia-rollup.arbitrum.io/rpc", bundlerUrl: bundlerUrl, entryPoint: entryPoint, accountFactory: accFactory, disposableFactory: factory, policyId: policyId, assetId: "ethereum", isTestnet: true },
+      { key: "ethereum", name: "Ethereum", chainId: 1, rpcUrl: "https://eth.llamarpc.com", bundlerUrl: "", entryPoint: "", accountFactory: "", disposableFactory: "", policyId: "", assetId: "ethereum", isTestnet: false },
+      { key: "avalanche", name: "Avalanche", chainId: 43114, rpcUrl: "https://api.avax.network/ext/bc/C/rpc", bundlerUrl: "", entryPoint: "", accountFactory: "", disposableFactory: "", policyId: "", assetId: "avalanche-2", isTestnet: false },
+      { key: "ethereum-sepolia", name: "Ethereum Sepolia", chainId: 11155111, rpcUrl: "https://rpc.sepolia.org", bundlerUrl: bundlerUrl, entryPoint: entryPoint, accountFactory: accFactory, disposableFactory: factory, policyId: policyId, assetId: "ethereum", isTestnet: true },
+    ];
+    return base.map(n => ({ ...n, ...(evmNetOverrides[n.key] || {}) }));
+  }, [bundlerUrl, entryPoint, accFactory, factory, policyId, evmNetOverrides]);
   const [activeNetworkKey, setActiveNetworkKey] = useState<string>("arbitrum-sepolia");
 
   const [accounts, setAccounts] = useState<Array<{ label: string; ownerPk: string; ownerAddr: string; accSalt: string; accountAddr: string | null }>>([]);
@@ -386,6 +412,18 @@ export default function Dashboard() {
         setAccFactory(ls("accFactory") || serverCfg.accountFactory || envAccFactory || DEFAULTS.accountFactory);
         setPolicyId(ls("policyId") || serverCfg.policyId || envPolicy || DEFAULTS.policyId);
         setWcProjectId(ls("wcProjectId") || serverCfg.wcProjectId || envWc || "");
+
+        try {
+          const overridesArr = Array.isArray(serverCfg.evmNetworkDefaults) ? serverCfg.evmNetworkDefaults : [];
+          const ov: Record<string, Partial<EvmNet>> = {};
+          for (const o of overridesArr) {
+            if (o && typeof o.key === "string") {
+              const { key, ...rest } = o as any;
+              ov[key] = rest;
+            }
+          }
+          setEvmNetOverrides(ov);
+        } catch {}
       } catch {}
     })();
   }, []);
@@ -510,6 +548,10 @@ export default function Dashboard() {
     try { return Boolean(bundlerUrl && ethers.isAddress(entryPoint) && ethers.isAddress(accFactory)); } catch { return false; }
   }, [bundlerUrl, entryPoint, accFactory]);
 
+  const actionsReady = useMemo(() => {
+    try { return Boolean(ethers.isAddress(entryPoint) && ethers.isAddress(accFactory)); } catch { return false; }
+  }, [entryPoint, accFactory]);
+
   useEffect(() => {
     try {
       const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
@@ -531,12 +573,12 @@ export default function Dashboard() {
   function selectNetwork(key: string){
     setActiveNetworkKey(key);
     const n = NETWORKS.find(x=>x.key===key)!;
-    if (n.rpcUrl) setRpcUrl(n.rpcUrl);
-    if (n.bundlerUrl) setBundlerUrl(n.bundlerUrl);
-    if (n.entryPoint) setEntryPoint(n.entryPoint);
-    if (n.accountFactory) setAccFactory(n.accountFactory);
-    if (n.disposableFactory) setFactory(n.disposableFactory);
-    if (n.policyId) setPolicyId(n.policyId);
+    setRpcUrl(n.rpcUrl || "");
+    setBundlerUrl(n.bundlerUrl || "");
+    setEntryPoint(n.entryPoint || "");
+    setAccFactory(n.accountFactory || "");
+    setFactory(n.disposableFactory || "");
+    setPolicyId(n.policyId || "");
     saveConfig();
   }
 
@@ -1103,14 +1145,38 @@ export default function Dashboard() {
                   }}
                 >
                   <DropdownMenuLabel>Networks</DropdownMenuLabel>
-                  {NETWORKS.map((n) => (
-                    <DropdownMenuItem
-                      key={n.key}
-                      onClick={() => selectNetwork(n.key)}
+                  <div className="px-2 pb-1">
+                    <ToggleGroup
+                      type="single"
+                      value={netFilter}
+                      onValueChange={(v) => v && setNetFilter(v as any)}
+                      variant="outline"
+                      size="sm"
                     >
-                      {n.name}
-                    </DropdownMenuItem>
-                  ))}
+                      <ToggleGroupItem value="mainnet">Mainnet</ToggleGroupItem>
+                      <ToggleGroupItem value="testnet">Testnet</ToggleGroupItem>
+                    </ToggleGroup>
+                  </div>
+                  {(() => {
+                    const active = NETWORKS.find((n) => n.key === activeNetworkKey);
+                    const filtered = NETWORKS.filter((n) => (netFilter === "mainnet" ? !n.isTestnet : n.isTestnet));
+                    const inFiltered = filtered.some((n) => n.key === activeNetworkKey);
+                    const list = inFiltered ? filtered : [active!, ...filtered.filter((n) => n.key !== activeNetworkKey)];
+                    return (
+                      <>
+                        {!inFiltered && (
+                          <DropdownMenuLabel className="text-xs text-muted-foreground">
+                            Currently on {active?.name}; filter is showing {netFilter === "mainnet" ? "Mainnets" : "Testnets"}.
+                          </DropdownMenuLabel>
+                        )}
+                        {list.map((n) => (
+                          <DropdownMenuItem key={n.key} onClick={() => selectNetwork(n.key)}>
+                            {n.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </>
+                    );
+                  })()}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem variant="destructive" disabled>
                     Manage networks
@@ -1536,7 +1602,22 @@ export default function Dashboard() {
                     Create your seedless smart wallet in one tap. No seed
                     phrases.
                   </p>
-                  <Button onClick={createWallet}>Create Seedless Wallet</Button>
+                  {actionsReady ? (
+                    <Button onClick={createWallet}>Create Seedless Wallet</Button>
+                  ) : (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <Button onClick={createWallet} disabled>
+                            Create Seedless Wallet
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Configure EntryPoint and Factory in Settings to enable actions on this network.
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -1556,14 +1637,29 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <Button
-                      onClick={() => {
-                        setOpenTransfer(true);
-                        setStep(1);
-                      }}
-                    >
-                      Send
-                    </Button>
+                    {actionsReady ? (
+                      <Button
+                        onClick={() => {
+                          setOpenTransfer(true);
+                          setStep(1);
+                        }}
+                      >
+                        Send
+                      </Button>
+                    ) : (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span>
+                            <Button disabled>
+                              Send
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          Configure EntryPoint and Factory in Settings to enable actions on this network.
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                     <Button
                       variant="outline"
                       onClick={() => setOpenReceive(true)}
@@ -1873,7 +1969,7 @@ export default function Dashboard() {
                   <Button variant="outline" onClick={() => setStep(1)}>
                     Back
                   </Button>
-                  <Button onClick={sendDisposableTx}>Send</Button>
+                  <Button onClick={sendDisposableTx} disabled={!actionsReady}>Send</Button>
                 </div>
               </div>
             )}
