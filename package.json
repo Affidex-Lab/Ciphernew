@@ -15,7 +15,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.832.0",
     "@fontsource/inter": "^5.2.5",
-    "near-api-js": "^2.1.4",
+    "near-api-js": "^5.1.1",
     "@hookform/resolvers": "^5.0.1",
     "@near-wallet-selector/core": "^8.3.0",
     "@near-wallet-selector/modal-ui": "^8.3.0",
