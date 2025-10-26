@@ -1,7 +1,7 @@
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Shield, Wallet, Globe, Sun, Moon } from "lucide-react";
+import { Shield, Wallet, Globe, Sun, Moon, Menu, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 
@@ -11,6 +11,7 @@ export default function Landing() {
     localStorage.getItem("theme") === "dark" ? "dark" : "light"
   );
   const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     if (theme === "dark") document.documentElement.classList.add("dark");
@@ -32,11 +33,12 @@ export default function Landing() {
       <header
         className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 ${
           scrolled
-            ? "backdrop-blur-md bg-white/60 dark:bg-[#0b0f17]/60 shadow-sm"
+            ? "backdrop-blur-md bg-white/70 dark:bg-[#0b0f17]/70 shadow-sm"
             : "bg-transparent"
         }`}
       >
         <div className="max-w-6xl mx-auto flex justify-between items-center px-6 py-4">
+          {/* Logo */}
           <div
             className="flex items-center gap-2 cursor-pointer"
             onClick={() => navigate("/")}
@@ -47,6 +49,7 @@ export default function Landing() {
             </span>
           </div>
 
+          {/* Desktop Nav */}
           <nav
             id="navbar"
             className="hidden md:flex items-center gap-8 text-sm font-medium"
@@ -62,24 +65,65 @@ export default function Landing() {
             ))}
           </nav>
 
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={toggleTheme}
-            className="rounded-full border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-          >
-            <motion.div
-              whileTap={{ rotate: 180 }}
-              transition={{ duration: 0.4 }}
+          {/* Right Controls */}
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={toggleTheme}
+              className="rounded-full border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
             >
-              {theme === "dark" ? (
-                <Sun className="w-5 h-5 text-yellow-400" />
+              <motion.div
+                whileTap={{ rotate: 180 }}
+                transition={{ duration: 0.4 }}
+              >
+                {theme === "dark" ? (
+                  <Sun className="w-5 h-5 text-yellow-400" />
+                ) : (
+                  <Moon className="w-5 h-5 text-gray-600" />
+                )}
+              </motion.div>
+            </Button>
+
+            {/* Mobile Menu Button */}
+            <button
+              className="md:hidden p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+              onClick={() => setMenuOpen(!menuOpen)}
+            >
+              {menuOpen ? (
+                <X className="w-6 h-6 text-gray-700 dark:text-gray-200" />
               ) : (
-                <Moon className="w-5 h-5 text-gray-600" />
+                <Menu className="w-6 h-6 text-gray-700 dark:text-gray-200" />
               )}
-            </motion.div>
-          </Button>
+            </button>
+          </div>
         </div>
+
+        {/* Mobile Menu Dropdown */}
+        <AnimatePresence>
+          {menuOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="md:hidden bg-white dark:bg-[#0b0f17] shadow-md border-t border-gray-200 dark:border-gray-700"
+            >
+              <div className="flex flex-col items-center space-y-4 py-6">
+                {["Features", "Developers", "Docs", "Contact"].map((link) => (
+                  <a
+                    key={link}
+                    href="#"
+                    onClick={() => setMenuOpen(false)}
+                    className="text-gray-800 dark:text-gray-300 hover:text-primary transition-colors"
+                  >
+                    {link}
+                  </a>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       <div className="h-20" />

@@ -1,11 +1,35 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Cipher Wallet</title>
     <meta name="description" content="Cipher Wallet MVP" />
+
+    <!-- Force correct color rendering on iOS and mobile -->
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#0b0f17" />
+
+    <!-- ✅ Preload saved theme before React loads -->
+    <script>
+      (function () {
+        try {
+          const savedTheme = localStorage.getItem("theme");
+          if (
+            savedTheme === "dark" ||
+            (!savedTheme && window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          } else {
+            document.documentElement.classList.remove("dark");
+          }
+        } catch (e) {
+          console.warn("Theme preload failed:", e);
+        }
+      })();
+    </script>
+
     <script>
       window.__ENV__ = {
         VITE_BUNDLER_URL: "${VITE_BUNDLER_URL}",
@@ -16,7 +40,8 @@
       };
     </script>
   </head>
-  <body>
+
+  <body class="antialiased transition-colors duration-500">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
