@@ -1868,6 +1868,12 @@ export default function Dashboard() {
                     >
                       Receive
                     </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => { if (accountAddr) { navigator.clipboard.writeText(accountAddr); try { (toast as any)?.success?.('Account copied'); } catch {} } }}
+                    >
+                      Copy Account
+                    </Button>
                     <Button variant="outline" onClick={createDisposableKey}>
                       Disposable Key
                     </Button>
@@ -1927,6 +1933,13 @@ export default function Dashboard() {
                       onClick={async () => { try { await discoverTokens(); } catch {} }}
                     >
                       Discover
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => { try { if (rpc && accountAddr) { const provider = new ethers.JsonRpcProvider(rpc); const bal = await provider.getBalance(accountAddr); setBalance(ethers.formatEther(bal)); } await refreshTokens(); } catch {} }}
+                    >
+                      Refresh
                     </Button>
                   </div>
                   <TabsContent value="tokens" className="mt-2">
@@ -2238,18 +2251,7 @@ export default function Dashboard() {
               <div className="mt-2 space-y-3">
                 <div className="space-y-3">
                   <Label>Network</Label>
-                  <Select value={addNetKey} onValueChange={setAddNetKey}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select network" />
-                    </SelectTrigger>
-                    <SelectContent className="z-100 bg-white dark:bg-gray-900 backdrop-blur-none bg-opacity-100 border border-gray-200 dark:border-gray-700 shadow-xl">
-                      {NETWORKS.map((n) => (
-                        <SelectItem key={n.key} value={n.key}>
-                          {n.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input readOnly value={NETWORKS.find((n) => n.key === activeNetworkKey)?.name || 'Network'} />
                 </div>
 
                 {addMode === "search" ? (
@@ -2265,7 +2267,7 @@ export default function Dashboard() {
                     <div className="max-h-60 overflow-auto rounded border">
                       {(() => {
                         const cid = String(
-                          NETWORKS.find((n) => n.key === addNetKey)?.chainId ||
+                          NETWORKS.find((n) => n.key === activeNetworkKey)?.chainId ||
                             ""
                         );
                         const list = (tokenIndex[cid] ||
@@ -2292,9 +2294,7 @@ export default function Dashboard() {
                               <Button
                                 size="sm"
                                 onClick={() => {
-                                  const targetCid = NETWORKS.find(
-                                    (n) => n.key === addNetKey
-                                  )?.chainId;
+                                  const targetCid = chainId ? Number(chainId) : NETWORKS.find((n) => n.key === activeNetworkKey)?.chainId;
                                   addTokenAddressToList(t.address, targetCid);
                                   if (String(targetCid) === String(chainId)) {
                                     refreshTokens();
@@ -2306,7 +2306,7 @@ export default function Dashboard() {
                                       (toast as any)?.success?.(
                                         "Token added to " +
                                           (NETWORKS.find(
-                                            (n) => n.key === addNetKey
+                                            (n) => n.key === activeNetworkKey
                                           )?.name || "network"),
                                         {
                                           description:
@@ -2325,7 +2325,7 @@ export default function Dashboard() {
                       })()}
                       {(() => {
                         const cid = String(
-                          NETWORKS.find((n) => n.key === addNetKey)?.chainId ||
+                          NETWORKS.find((n) => n.key === activeNetworkKey)?.chainId ||
                             ""
                         );
                         const list = (tokenIndex[cid] ||
