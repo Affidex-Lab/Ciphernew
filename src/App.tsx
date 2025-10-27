@@ -33,9 +33,11 @@ import { Core } from "@walletconnect/core";
 import { getSdkError } from "@walletconnect/utils";
 
 // NEAR imports
-import { ensureNearKey } from "./near/keyring";
+import { ensureNearKey, } from "./near/keyring";
 import { fetchNearBalance, formatYoctoToNear, getNearPublicKey, sendNear, explorerTxUrl, emitAnalytics } from "./near/helpers";
 import { getNearConfig } from "./near/client";
+import { openWalletSelector, disconnectNear as selectorDisconnect, getActiveNearAccountId } from "./near/selector";
+import { KeyPair } from "near-api-js";
 
 export default function Dashboard() {
   //Nav Variable
@@ -972,6 +974,8 @@ export default function Dashboard() {
   const [openNearSend, setOpenNearSend] = useState(false);
   const [openNearReceive, setOpenNearReceive] = useState(false);
   const [nearReceiver, setNearReceiver] = useState("");
+  const [openNearDisposable, setOpenNearDisposable] = useState(false);
+  const [nearDisposable, setNearDisposable] = useState<{ publicKey: string; secretKey: string } | null>(null);
   const [nearAmount, setNearAmount] = useState("");
 
   type NearToken = { contractId: string; symbol: string; name: string; decimals: number; balance: string };
@@ -1352,7 +1356,7 @@ export default function Dashboard() {
                 <CardContent className="space-y-3">
                   <p className="text-sm text-muted-foreground">Connect your NEAR account or create a new one.</p>
                   <div className="flex flex-wrap gap-2">
-                    <Button onClick={handleConnectNear}>Connect NEAR Wallet</Button>
+                    <Button onClick={async()=>{ try{ await openWalletSelector(); const acc = await getActiveNearAccountId(); if (acc){ setNearAccountId(acc); const bal = await fetchNearBalance(acc).catch(()=>"0"); setNearBalance(formatYoctoToNear(bal)); } }catch(e:any){ try { (toast as any)?.error?.('NEAR connect failed', { description: e?.message || String(e) }); } catch {} } }>Connect NEAR Wallet</Button>
                     <Button variant="outline" onClick={async()=>{ const cfg = await getNearConfig(); window.open(`${cfg.walletUrl}/create`, '_blank'); }}>Create NEAR Account</Button>
                   </div>
                 </CardContent>
@@ -1372,10 +1376,10 @@ export default function Dashboard() {
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Button onClick={()=> setOpenNearSend(true)}>Send</Button>
                     <Button variant="outline" onClick={()=> setOpenNearReceive(true)}>Receive</Button>
-                    <Button variant="outline" disabled>Disposable Key</Button>
+                    <Button variant="outline" onClick={()=>{ const kp = KeyPair.fromRandom('ed25519'); setNearDisposable({ publicKey: kp.getPublicKey().toString(), secretKey: kp.secretKey }); setOpenNearDisposable(true); try { (toast as any)?.success?.('Session key created'); } catch {} }}>Session Key</Button>
                     <Button variant="outline" onClick={() => { try { (toast as any)?.info?.('Funding coming soon'); } catch {} }}>Fund wallet</Button>
                     <Button variant="outline" onClick={() => { try { (toast as any)?.info?.('Swap coming soon'); } catch {} }}>Swap</Button>
-                    <Button variant="outline" disabled>Connect dApp</Button>
+                    <Button variant="outline" onClick={async()=>{ try{ await openWalletSelector(); const acc = await getActiveNearAccountId(); if (acc){ setNearAccountId(acc); const bal = await fetchNearBalance(acc).catch(()=>"0"); setNearBalance(formatYoctoToNear(bal)); } }catch(e:any){ try { (toast as any)?.error?.('NEAR connect failed', { description: e?.message || String(e) }); } catch {} } }}>Connect dApp</Button>
                   </div>
                 </div>
 
@@ -1613,6 +1617,34 @@ export default function Dashboard() {
                     <Input readOnly value={nearAccountId || ''} />
                     <Button variant="outline" onClick={()=>{ if(nearAccountId) navigator.clipboard.writeText(nearAccountId); }}>Copy</Button>
                   </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={openNearDisposable} onOpenChange={setOpenNearDisposable}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>NEAR Session Key</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  {nearDisposable ? (
+                    <>
+                      <div className="space-y-1 text-sm">
+                        <div className="text-muted-foreground">Public Key</div>
+                        <div className="truncate font-mono text-xs">{nearDisposable.publicKey}</div>
+                      </div>
+                      <div className="space-y-1 text-sm">
+                        <div className="text-muted-foreground">Secret Key</div>
+                        <div className="truncate font-mono text-xs">{nearDisposable.secretKey}</div>
+                      </div>
+                      <div className="flex justify-end gap-2 pt-2">
+                        <Button variant="outline" onClick={()=>{ setNearDisposable(null); setOpenNearDisposable(false); try { (toast as any)?.info?.('Session ended'); } catch {} }}>End session</Button>
+                      </div>
+                      <div className="text-xs text-muted-foreground">This key is kept only in memory and will be destroyed when you end the session or reload.</div>
+                    </>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">No active session.</div>
+                  )}
                 </div>
               </DialogContent>
             </Dialog>
