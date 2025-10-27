@@ -1,0 +1,28 @@
+{
+  "name": "cipherwallet-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "commonjs",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "migrate": "node dist/db/migrate.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "ethers": "^6.13.2",
+    "express": "^4.19.2",
+    "helmet": "^7.1.0",
+    "pg": "^8.11.5",
+    "pino": "^9.4.0",
+    "zod": "^3.25.20"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.15.21",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "~5.8.3"
+  }
+}

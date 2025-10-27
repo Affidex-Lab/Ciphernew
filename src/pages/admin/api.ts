@@ -21,14 +21,10 @@ export type AdminAction = {
 };
 
 function baseUrl(): string {
-  const fromCfg = (window as any).__APP_CONFIG__?.adminApiBase;
-  try {
-    const meta = (window as any).__APP_CONFIG__;
-    if (meta && meta.adminApiBase) return meta.adminApiBase;
-  } catch {}
-  const ls = sessionStorage.getItem('adminApiBase') || '';
-  const env = (import.meta as any).env?.VITE_ADMIN_API_BASE || '';
-  return fromCfg || ls || env || '';
+  const env = (import.meta as any).env?.VITE_API_BASE || '';
+  const cfg = (window as any).__APP_CONFIG__?.apiBase || (window as any).__APP_CONFIG__?.adminApiBase;
+  const ls = sessionStorage.getItem('apiBase') || sessionStorage.getItem('adminApiBase') || '';
+  return env || cfg || ls || '';
 }
 
 function token(): string {
@@ -57,7 +53,8 @@ export async function ensureAdminToken() {
 }
 
 async function request(path: string, init?: RequestInit) {
-  const url = baseUrl().replace(/\/$/, '') + path;
+  const base = baseUrl();
+  const url = (base ? base.replace(/\/$/, '') : '') + path;
   const res = await fetch(url, {
     ...init,
     headers: {
@@ -76,7 +73,8 @@ async function request(path: string, init?: RequestInit) {
 }
 
 export async function listWallets(params: { status?: string; q?: string; page?: number; pageSize?: number }) {
-  const u = new URL(baseUrl().replace(/\/$/, '') + '/admin/wallets');
+  const base = baseUrl();
+  const u = new URL((base ? base.replace(/\/$/, '') : '') + '/admin/wallets', window.location.origin);
   if (params.status) u.searchParams.set('status', params.status);
   if (params.q) u.searchParams.set('q', params.q);
   if (params.page) u.searchParams.set('page', String(params.page));
@@ -109,4 +107,25 @@ export async function executeRecovery(id: string) {
 
 export async function getStats() {
   return request('/admin/stats');
+}
+
+export async function exportWalletsCsv(params: { status?: string; q?: string }) {
+  const base = baseUrl();
+  const u = new URL((base ? base.replace(/\/$/, '') : '') + '/admin/wallets.csv', window.location.origin);
+  if (params.status) u.searchParams.set('status', params.status);
+  if (params.q) u.searchParams.set('q', params.q);
+  const res = await fetch(u.toString(), { headers: { Authorization: 'Bearer ' + token() } });
+  if (res.status === 401) { sessionStorage.removeItem('adminToken'); await ensureAdminToken(); throw new Error('Unauthorized'); }
+  if (!res.ok) throw new Error(await res.text());
+  return await res.blob();
+}
+
+export async function exportStatsCsv(period: 'daily'|'weekly'|'monthly' = 'daily') {
+  const base = baseUrl();
+  const u = new URL((base ? base.replace(/\/$/, '') : '') + '/admin/stats.csv', window.location.origin);
+  u.searchParams.set('period', period);
+  const res = await fetch(u.toString(), { headers: { Authorization: 'Bearer ' + token() } });
+  if (res.status === 401) { sessionStorage.removeItem('adminToken'); await ensureAdminToken(); throw new Error('Unauthorized'); }
+  if (!res.ok) throw new Error(await res.text());
+  return await res.blob();
 }

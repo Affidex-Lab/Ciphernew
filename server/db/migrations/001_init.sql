@@ -1,9 +1,7 @@
--- Enable required extensions
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- wallets table
 CREATE TABLE IF NOT EXISTS wallets (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   created_at timestamptz NOT NULL DEFAULT now(),
   type text NOT NULL CHECK (type IN ('cipher','disposable','near')),
   chain_id int,
@@ -13,9 +11,8 @@ CREATE TABLE IF NOT EXISTS wallets (
   last_seen_at timestamptz
 );
 
--- admin_actions table
 CREATE TABLE IF NOT EXISTS admin_actions (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   wallet_id uuid REFERENCES wallets(id) ON DELETE CASCADE,
   action text NOT NULL CHECK (action IN ('disable','sweep','propose_recovery','execute_recovery')),
   destination_address text,
@@ -26,19 +23,7 @@ CREATE TABLE IF NOT EXISTS admin_actions (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- indexes
-CREATE INDEX IF NOT EXISTS idx_wallets_account_address ON wallets(account_address);
-CREATE INDEX IF NOT EXISTS idx_wallets_created_at ON wallets(created_at);
-CREATE INDEX IF NOT EXISTS idx_admin_actions_wallet_id ON admin_actions(wallet_id);
-CREATE INDEX IF NOT EXISTS idx_admin_actions_created_at ON admin_actions(created_at);
-
--- trigger to auto-update updated_at
-CREATE OR REPLACE FUNCTION set_updated_at() RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS trg_admin_actions_updated_at ON admin_actions;
-CREATE TRIGGER trg_admin_actions_updated_at BEFORE UPDATE ON admin_actions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE INDEX IF NOT EXISTS idx_wallets_account_address ON wallets (account_address);
+CREATE INDEX IF NOT EXISTS idx_wallets_created_at ON wallets (created_at);
+CREATE INDEX IF NOT EXISTS idx_admin_actions_wallet_id ON admin_actions (wallet_id);
+CREATE INDEX IF NOT EXISTS idx_admin_actions_created_at ON admin_actions (created_at);

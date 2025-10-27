@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getStats, ensureAdminToken, listWallets, disableWallet, sweepWallet, proposeRecovery, executeRecovery, type Wallet, type AdminAction } from './api';
+import { getStats, ensureAdminToken, listWallets, disableWallet, sweepWallet, proposeRecovery, executeRecovery, exportWalletsCsv, exportStatsCsv, type Wallet, type AdminAction } from './api';
 
 export default function AdminDashboard() {
   const [tokenReady, setTokenReady] = useState(false);
@@ -25,6 +25,7 @@ export default function AdminDashboard() {
   const [includeNative, setIncludeNative] = useState(true);
   const [tokenList, setTokenList] = useState<string>('');
   const [stats, setStats] = useState<any>(null);
+  const [statsPeriod, setStatsPeriod] = useState<'daily'|'weekly'|'monthly'>('daily');
 
   useEffect(() => { (async () => { await ensureAdminToken(); setTokenReady(true); })(); }, []);
 
@@ -102,6 +103,28 @@ export default function AdminDashboard() {
       </div>
 
       <Card className="mb-6">
+        <CardHeader><CardTitle>KPIs</CardTitle></CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-1">
+              <Label>Period</Label>
+              <Select value={statsPeriod} onValueChange={(v:any)=> setStatsPeriod(v)}>
+                <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="ml-auto flex gap-2">
+              <Button variant="outline" onClick={async()=>{ try{ const b = await exportStatsCsv(statsPeriod); const url = URL.createObjectURL(b); const a = document.createElement('a'); a.href = url; a.download = `stats-${statsPeriod}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);}catch{}}}>Export CSV</Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
         <CardHeader><CardTitle>Wallets</CardTitle></CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-end gap-2 mb-3">
@@ -133,6 +156,7 @@ export default function AdminDashboard() {
               </Select>
             </div>
             <div className="ml-auto flex gap-2">
+              <Button variant="outline" onClick={async()=>{ try{ const b = await exportWalletsCsv({ status, q }); const url = URL.createObjectURL(b); const a = document.createElement('a'); a.href = url; a.download = 'wallets.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);}catch{}}}>Export CSV</Button>
               <Button variant="outline" onClick={() => setPage(Math.max(1, page-1))}>Prev</Button>
               <Button variant="outline" onClick={() => setPage(page+1)}>Next</Button>
             </div>
