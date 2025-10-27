@@ -936,8 +936,8 @@ export default function Dashboard() {
       const latest = await provider.getBlockNumber();
       const fromBlock = latest - 120000 > 0 ? latest - 120000 : 0;
       const topic = ethers.id("Transfer(address,address,uint256)");
-      const toLogs = await provider.getLogs({ fromBlock, toBlock: latest, topics: [topic, null, ethers.hexZeroPad(accountAddr, 32)] });
-      const fromLogs = await provider.getLogs({ fromBlock, toBlock: latest, topics: [topic, ethers.hexZeroPad(accountAddr, 32), null] });
+      const toLogs = await provider.getLogs({ fromBlock, toBlock: latest, topics: [topic, null, ethers.zeroPadValue(accountAddr, 32)] });
+      const fromLogs = await provider.getLogs({ fromBlock, toBlock: latest, topics: [topic, ethers.zeroPadValue(accountAddr, 32), null] });
       const addresses = Array.from(new Set([...toLogs, ...fromLogs].map(l => l.address)));
       const key = `tokens:${String(chainId||"")}`;
       const list = JSON.parse(localStorage.getItem(key) || "[]") as string[];

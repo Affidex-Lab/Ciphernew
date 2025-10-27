@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Shield, Wallet, Globe, Chrome as ChromeIcon, Apple, Android } from "lucide-react";
+import { Shield, Wallet, Globe, Chrome as ChromeIcon, Apple, Smartphone } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 
@@ -192,7 +192,7 @@ export default function Landing() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button className="group flex items-center gap-2 border-primary text-primary hover:bg-primary hover:text-white" variant="outline" onClick={e=>e.preventDefault()}>
-                      <Android className="h-4 w-4" />
+                      <Smartphone className="h-4 w-4" />
                       <span className="transition-opacity group-hover:opacity-0">Google Play</span>
                       <span className="absolute opacity-0 transition-opacity group-hover:opacity-100">Coming soon</span>
                     </Button>
