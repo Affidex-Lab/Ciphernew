@@ -561,7 +561,8 @@ export default function Dashboard() {
         if (!rpc) { setBalance(""); return; }
         const active = getActiveEvmAddress();
         if (!active) { setBalance(""); return; }
-        const provider = new ethers.JsonRpcProvider(rpc);
+        const provider = getJsonRpcProvider();
+        if (!provider) { setBalance(""); return; }
         const bal = await provider.getBalance(active);
         setBalance(ethers.formatEther(bal));
       } catch {}
@@ -615,7 +616,8 @@ export default function Dashboard() {
       try {
         const active = getActiveEvmAddress();
         if (!active) return;
-        const provider = new ethers.JsonRpcProvider(rpc);
+        const provider = getJsonRpcProvider();
+        if (!provider) return;
         const bal = await provider.getBalance(active);
         if (mounted) setBalance(ethers.formatEther(bal));
       } catch {}
@@ -993,12 +995,34 @@ export default function Dashboard() {
     } catch { return accountAddr || ownerAddr || null; }
   }
 
+  function getJsonRpcProvider(): ethers.JsonRpcProvider | null {
+    try {
+      if (!rpc) return null;
+      if (chainId === 11155111n) {
+        const candidates = [
+          rpc,
+          'https://rpc.sepolia.org',
+          'https://ethereum-sepolia-rpc.publicnode.com',
+          'https://ethereum-sepolia.blockpi.network/v1/rpc/public'
+        ];
+        for (const u of candidates) {
+          if (u && typeof u === 'string') {
+            try { return new ethers.JsonRpcProvider(u); } catch {}
+          }
+        }
+        return new ethers.JsonRpcProvider(rpc);
+      }
+      return new ethers.JsonRpcProvider(rpc);
+    } catch { return null; }
+  }
+
   async function refreshTokens() {
     try {
       if (!rpc) return;
       const active = getActiveEvmAddress();
       if (!active) return;
-      const provider = new ethers.JsonRpcProvider(rpc);
+      const provider = getJsonRpcProvider();
+      if (!provider) return;
       const key = `tokens:${String(chainId||"")}`;
       const stored = JSON.parse(localStorage.getItem(key) || "[]") as string[];
       const next: Token[] = [];
@@ -1969,6 +1993,7 @@ export default function Dashboard() {
                             </div>
                             <div className="shrink-0">{balance || "0"}</div>
                           </div>
+                          <div className="text-[10px] text-muted-foreground">Active: {(getActiveEvmAddress()?.slice(0,6) || '')}…{(getActiveEvmAddress()?.slice(-4) || '')}</div>
                           {tokens.length === 0 && (
                             <p className="text-xs text-muted-foreground">
                               No tokens yet — add from “+ Add”.
