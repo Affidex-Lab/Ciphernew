@@ -558,13 +558,15 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       try {
-        if (!rpc || !accountAddr) { setBalance(""); return; }
+        if (!rpc) { setBalance(""); return; }
+        const active = getActiveEvmAddress();
+        if (!active) { setBalance(""); return; }
         const provider = new ethers.JsonRpcProvider(rpc);
-        const bal = await provider.getBalance(accountAddr);
+        const bal = await provider.getBalance(active);
         setBalance(ethers.formatEther(bal));
       } catch {}
     })();
-  }, [rpc, accountAddr]);
+  }, [rpc, accountAddr, chainId, ownerAddr]);
 
   useEffect(() => {
     (async () => {
@@ -605,21 +607,23 @@ export default function Dashboard() {
   }, [rpc, accountAddr, chainId]);
 
   useEffect(() => {
-    if (!rpc || !accountAddr) return;
+    if (!rpc) return;
     let mounted = true;
     const tick = async () => {
       if (ethRefreshInFlight.current) return;
       ethRefreshInFlight.current = true;
       try {
+        const active = getActiveEvmAddress();
+        if (!active) return;
         const provider = new ethers.JsonRpcProvider(rpc);
-        const bal = await provider.getBalance(accountAddr);
+        const bal = await provider.getBalance(active);
         if (mounted) setBalance(ethers.formatEther(bal));
       } catch {}
       finally { ethRefreshInFlight.current = false; }
     };
     const id = setInterval(tick, 20000);
     return () => { mounted = false; clearInterval(id); };
-  }, [rpc, accountAddr]);
+  }, [rpc, accountAddr, chainId, ownerAddr]);
 
   useEffect(() => {
     if (!rpc || !accountAddr || !chainId) return;
@@ -981,9 +985,19 @@ export default function Dashboard() {
     }
   }
 
+  function getActiveEvmAddress(): string | null {
+    try {
+      const cid = chainId ? String(chainId) : '';
+      const saved = cid ? (localStorage.getItem(`accountAddr:${cid}`) || '') : '';
+      return accountAddr || (saved || null) || ownerAddr || null;
+    } catch { return accountAddr || ownerAddr || null; }
+  }
+
   async function refreshTokens() {
     try {
-      if (!rpc || !accountAddr) return;
+      if (!rpc) return;
+      const active = getActiveEvmAddress();
+      if (!active) return;
       const provider = new ethers.JsonRpcProvider(rpc);
       const key = `tokens:${String(chainId||"")}`;
       const stored = JSON.parse(localStorage.getItem(key) || "[]") as string[];
@@ -1001,7 +1015,7 @@ export default function Dashboard() {
           try { name = await erc20.name(); } catch {}
           try { symbol = await erc20.symbol(); } catch {}
           try { decimals = Number(await erc20.decimals()); } catch {}
-          try { raw = await erc20.balanceOf(accountAddr); } catch {}
+          try { raw = await erc20.balanceOf(active); } catch {}
           next.push({ address: a, name: name||"Token", symbol: symbol||"ERC20", decimals, balance: ethers.formatUnits(raw, decimals) });
         } catch {}
       }
@@ -2214,17 +2228,17 @@ export default function Dashboard() {
                 <img
                   alt="QR"
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${
-                    accountAddr || ""
+                    getActiveEvmAddress() || ""
                   }`}
                   className="rounded bg-white p-2"
                 />
               </div>
               <div className="flex items-center gap-2">
-                <Input readOnly value={accountAddr || ""} />
+                <Input readOnly value={getActiveEvmAddress() || ""} />
                 <Button
                   variant="outline"
                   onClick={() => {
-                    if (accountAddr) navigator.clipboard.writeText(accountAddr);
+                    { const addr = getActiveEvmAddress(); if (addr) navigator.clipboard.writeText(addr); }
                   }}
                 >
                   Copy
