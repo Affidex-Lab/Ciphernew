@@ -79,6 +79,7 @@ export default function Dashboard() {
   const [balance, setBalance] = useState<string>("");
   const [chainId, setChainId] = useState<bigint | null>(null);
   const [usdPrice, setUsdPrice] = useState<number>(0);
+  const [nearUsdPrice, setNearUsdPrice] = useState<number>(0);
 
   type Token = { address: string; symbol: string; name: string; decimals: number; balance: string };
   const [tokens, setTokens] = useState<Token[]>([]);
@@ -451,6 +452,20 @@ export default function Dashboard() {
       } catch {}
     })();
   }, [chainId]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const id = "near-protocol";
+        const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`);
+        if (res.ok) {
+          const j = await res.json();
+          const p = Number(j[id]?.usd) || 0;
+          setNearUsdPrice(p);
+        }
+      } catch {}
+    })();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -1349,15 +1364,18 @@ export default function Dashboard() {
                 <div className="w-full">
                   <div className="flex items-end justify-between">
                     <div className="space-y-1">
-                      <div className="text-xs text-muted-foreground">NEAR Balance</div>
-                      <div className="text-4xl font-semibold tracking-tight">{nearBalance || '0.00'} Ⓝ</div>
-                      <div className="text-xs text-muted-foreground">{nearAccountId}</div>
+                      <div className="text-xs text-muted-foreground">Total</div>
+                      <div className="text-4xl font-semibold tracking-tight">US ${(parseFloat(nearBalance || '0') * nearUsdPrice || 0).toFixed(2)}</div>
+                      <div className="text-xs text-muted-foreground">{nearBalance || '0.00'} Ⓝ</div>
                     </div>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <Button onClick={()=> setOpenNearSend(true)}>Send NEAR</Button>
-                    <Button variant="outline" onClick={()=>{ navigator.clipboard.writeText(nearAccountId); try { (toast as any)?.success?.('Account copied'); } catch {} }}>Copy Account</Button>
-                    <Button variant="outline" onClick={handleDisconnectNear}>Disconnect</Button>
+                    <Button onClick={()=> setOpenNearSend(true)}>Send</Button>
+                    <Button variant="outline" onClick={()=> setOpenNearReceive(true)}>Receive</Button>
+                    <Button variant="outline" disabled>Disposable Key</Button>
+                    <Button variant="outline" onClick={() => { try { (toast as any)?.info?.('Funding coming soon'); } catch {} }}>Fund wallet</Button>
+                    <Button variant="outline" onClick={() => { try { (toast as any)?.info?.('Swap coming soon'); } catch {} }}>Swap</Button>
+                    <Button variant="outline" disabled>Connect dApp</Button>
                   </div>
                 </div>
 
@@ -1372,11 +1390,12 @@ export default function Dashboard() {
             )}
 
 
-            <Tabs defaultValue="nearTokens" className="w-full mt-4">
+            <Tabs defaultValue="tokens" className="w-full mt-4" onValueChange={(v)=>{ /* store if needed */ }}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <TabsList>
-                  <TabsTrigger value="nearTokens">Tokens</TabsTrigger>
-                  <TabsTrigger value="nearNfts">NFTs</TabsTrigger>
+                  <TabsTrigger value="tokens">Tokens</TabsTrigger>
+                  <TabsTrigger value="defi">DeFi</TabsTrigger>
+                  <TabsTrigger value="nfts">NFTs</TabsTrigger>
                 </TabsList>
                 <div className="flex gap-2">
                   <Button
@@ -1384,18 +1403,11 @@ export default function Dashboard() {
                     size="sm"
                     onClick={() => setOpenNearAddToken(true)}
                   >
-                    + Add FT
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setOpenNearAddNft(true)}
-                  >
-                    + Add NFT
+                    + Add
                   </Button>
                 </div>
               </div>
-              <TabsContent value="nearTokens" className="mt-2">
+              <TabsContent value="tokens" className="mt-2">
                 <Card className="w-full text-left">
                   <CardContent className="space-y-4 pt-6">
                     <div className="space-y-1">
@@ -1422,7 +1434,14 @@ export default function Dashboard() {
                   </CardContent>
                 </Card>
               </TabsContent>
-              <TabsContent value="nearNfts" className="mt-2">
+              <TabsContent value="defi" className="mt-2">
+                <Card className="w-full text-left">
+                  <CardContent className="space-y-4 pt-6">
+                    <p className="text-sm text-muted-foreground">DeFi features are coming soon to NEAR.</p>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              <TabsContent value="nfts" className="mt-2">
                 <Card className="w-full text-left">
                   <CardContent className="space-y-4 pt-6">
                     {nearNftCollections.length === 0 && (
