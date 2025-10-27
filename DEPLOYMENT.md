@@ -2,8 +2,9 @@ Deployment and Deploy Previews
 
 Overview
 - Frontend: Vite 6 + React 19 + Tailwind CSS v4 (@tailwindcss/vite)
+- Backend: Node 20 + Express 4 (server/), Postgres (pg), ethers v6 (Render web service). Render blueprint provided in render.yaml.
 - Build: Vite static build to dist
-- Hosting: Netlify (SPA)
+- Hosting: Netlify (SPA) for frontend, Render for backend
 
 Build command and publish directory
 - Build command: npm run build
@@ -18,48 +19,42 @@ Install and build locally in CI conditions
 - Build: npm run build
 - Full CI-like run: npm ci && npm run build
 
-Environment and runtime configuration
+Environment and runtime configuration (frontend)
 - Compile-time vars: import.meta.env (VITE_*) are optional; the app doesn’t require them to build.
-- Runtime config: public/config.json is fetched at runtime and overrides defaults for:
-  - bundlerUrl, rpcUrl, entryPoint, accountFactory, disposableFactory, policyId
-  - NEAR: nearNetwork, nearNodeUrl, nearWalletUrl, nearHelperUrl, nearDefaultTokens, nearDefaultNfts
+- Runtime config: public/config.json is fetched at runtime and can include optional apiBase for admin API.
+  - Additionally, the frontend reads VITE_API_BASE (highest priority) for the admin API base URL; fallback is relative path for local dev.
+  - EVM/NEAR wallet config keys remain as before (bundlerUrl, rpcUrl, entryPoint, accountFactory, disposableFactory, policyId, etc.)
 - To change defaults per environment, update public/config.json in the deploy. It is served with no-cache headers by Netlify (see netlify.toml).
 
-Netlify configuration
-- File: netlify.toml (root)
-- Settings:
-  [build]
-    publish = "dist"
-    command = "npm run build"
-  [build.environment]
-    NODE_VERSION = "20"
-  Redirects: SPA redirect from /* to /index.html
-  Headers: Security headers including CSP; index.html is marked no-cache. Assets are long-cache with immutable.
+Backend (Render)
+- Code: server/ (TypeScript). See server/README.md for details.
+- Environment variables (set in Render, not committed):
+  - ADMIN_API_TOKEN — required for admin endpoints
+  - DATABASE_URL — Postgres connection string (Render blueprint maps from "cipherwalletmvp"; if not found, set manually in the service)
+  - ADMIN_EVM_PRIVATE_KEY — 0x... used for permissible on-chain actions
+  - RPC_URL — Arbitrum One RPC; start with mainnet 42161
+  - ADMIN_ALLOWED_ORIGINS — comma-separated origins allowed by CORS (e.g., http://localhost:5173, https://<your-netlify-site>.netlify.app)
+  - ADMIN_RATE_LIMIT — requests/minute for admin endpoints (default 120)
+  - WEBHOOK_RATE_LIMIT — requests/minute for webhooks (default 60)
+- Build Command: cd server && npm ci && npm run build && npm run migrate
+- Start Command: cd server && npm start
+- After deploy: Render runs migrate during build per render.yaml
 
-Troubleshooting
-- If Netlify install fails with peer dependency errors:
-  - Ensure package-lock.json is in sync (run npm install --package-lock-only locally, commit, push).
-  - If a third-party peer stays behind, set temporarily in Netlify UI or netlify.toml: NPM_FLAGS="--legacy-peer-deps". Prefer fixing the dependency constraint first.
-- Clear Netlify build cache from the UI if stale caches cause odd failures.
-- To increase verbosity, set temporary env: NETLIFY_BUILD_DEBUG=1.
+Security and routing
+- Admin path (frontend): /ciphsecure — not linked in nav.
+- Frontend sends X-Robots noindex headers for /ciphsecure via netlify.toml.
+- All admin APIs protected with Authorization: Bearer <ADMIN_API_TOKEN>.
+- Do not hardcode secrets. Only read from environment on Render.
+- CSV endpoints available: GET /admin/wallets.csv and /admin/stats.csv?period=daily|weekly|monthly
 
-Deploy Previews
-- Native Netlify Deploy Previews are recommended (enable in the Netlify site connected to this repo).
-- GitHub Action fallback (if native previews cannot be enabled):
-  - Workflow: .github/workflows/netlify-preview.yml
-  - Triggers on pull_request and posts a preview URL when the following repo secrets are configured:
-    - NETLIFY_AUTH_TOKEN: Personal token (Netlify user) with deploy rights to the site.
-    - NETLIFY_SITE_ID: Your Netlify site ID.
-  - It uses Node 20, runs npm ci && npm run build, then netlify deploy --dir dist with the PR branch as the alias.
-
-Security headers and CSP
-- netlify.toml defines global headers with a restrictive CSP. WalletConnect, NEAR endpoints, and JSON RPC hosts are allowed via connect-src. If a new endpoint is needed and blocked, extend connect-src accordingly.
-
-Contracts folder
-- contracts/ contains a separate Hardhat project. It does not participate in the Netlify install/build. No action required.
+Limitations documented
+- Immediate sweeping is only possible when the admin key is authorized by the wallet contract. Otherwise, propose/execute recovery flows apply.
+- DisposableAccount sweep is not applicable for “existing” accounts (executeAndBurn transfers at creation).
+- If a contract method is not available or the admin key lacks permissions, the API returns skipped/not-authorized and logs an admin action entry.
 
 Acceptance checklist
-- npm ci && npm run build succeeds locally on Node 20.
-- Netlify build completes successfully on main with publish dir dist.
-- Deploy Previews post a preview URL on PRs (via native Netlify or the provided GitHub Action when secrets are present).
-- SPA routing works (/* redirected to /index.html).
+- /ciphsecure renders a protected admin dashboard (no nav links; not indexed) with wallet list, actions, and KPIs.
+- Frontend invokes /webhooks/wallet-created on successful wallet creation and persists records.
+- Admin API is secured by token; unauthorized requests are rejected.
+- Disable action updates status and logs an admin action; sweep/propose/execute endpoints attempt on-chain actions when permissible and log tx hashes; otherwise clearly return skipped/not-authorized.
+- netlify.toml updated for /ciphsecure headers; connect-src already allows https:. Once you share your Render API URL, optionally add it explicitly to CSP connect-src for clarity.
