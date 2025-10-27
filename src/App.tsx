@@ -1980,7 +1980,7 @@ export default function Dashboard() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={async () => { try { if (rpc && accountAddr) { const provider = new ethers.JsonRpcProvider(rpc); const bal = await provider.getBalance(accountAddr); setBalance(ethers.formatEther(bal)); } await refreshTokens(); } catch {} }}
+                      onClick={async () => { try { const active = getActiveEvmAddress(); const provider = getJsonRpcProvider(); if (active && provider) { const bal = await provider.getBalance(active); setBalance(ethers.formatEther(bal)); } await refreshTokens(); } catch {} }}
                     >
                       Refresh
                     </Button>
