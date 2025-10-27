@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Settings, WalletMinimal, ChevronDown, Bell, Home as HomeIcon, Compass, ActivitySquare } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ethers } from "ethers";
 import {
@@ -82,6 +82,10 @@ export default function Dashboard() {
   const [chainId, setChainId] = useState<bigint | null>(null);
   const [usdPrice, setUsdPrice] = useState<number>(0);
   const [nearUsdPrice, setNearUsdPrice] = useState<number>(0);
+
+  const ethRefreshInFlight = useRef(false);
+  const tokenRefreshInFlight = useRef(false);
+  const priceRefreshInFlight = useRef(false);
 
   type Token = { address: string; symbol: string; name: string; decimals: number; balance: string };
   const [tokens, setTokens] = useState<Token[]>([]);
@@ -442,18 +446,26 @@ export default function Dashboard() {
   }, [rpc]);
 
   useEffect(() => {
-    (async () => {
+    const assetId = (NETWORKS.find((n) => n.key === activeNetworkKey)?.assetId) || "ethereum";
+    let timer: any;
+    let mounted = true;
+    const fetchPrice = async () => {
+      if (priceRefreshInFlight.current) return;
+      priceRefreshInFlight.current = true;
       try {
-        const id = "ethereum";
-        const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`);
+        const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${assetId}&vs_currencies=usd`);
         if (res.ok) {
           const j = await res.json();
-          const p = Number(j[id]?.usd) || 0;
-          setUsdPrice(p);
+          const p = Number(j[assetId]?.usd) || 0;
+          if (mounted) setUsdPrice(p);
         }
       } catch {}
-    })();
-  }, [chainId]);
+      finally { priceRefreshInFlight.current = false; }
+    };
+    fetchPrice();
+    timer = setInterval(fetchPrice, 60000);
+    return () => { mounted = false; clearInterval(timer); };
+  }, [activeNetworkKey, NETWORKS]);
 
   useEffect(() => {
     (async () => {
@@ -590,6 +602,51 @@ export default function Dashboard() {
     })();
   }, [rpc, accountAddr, chainId]);
 
+  useEffect(() => {
+    if (!rpc || !accountAddr) return;
+    let mounted = true;
+    const tick = async () => {
+      if (ethRefreshInFlight.current) return;
+      ethRefreshInFlight.current = true;
+      try {
+        const provider = new ethers.JsonRpcProvider(rpc);
+        const bal = await provider.getBalance(accountAddr);
+        if (mounted) setBalance(ethers.formatEther(bal));
+      } catch {}
+      finally { ethRefreshInFlight.current = false; }
+    };
+    const id = setInterval(tick, 20000);
+    return () => { mounted = false; clearInterval(id); };
+  }, [rpc, accountAddr]);
+
+  useEffect(() => {
+    if (!rpc || !accountAddr || !chainId) return;
+    let mounted = true;
+    const tick = async () => {
+      if (tokenRefreshInFlight.current) return;
+      tokenRefreshInFlight.current = true;
+      try { await refreshTokens(); } catch {}
+      finally { tokenRefreshInFlight.current = false; }
+    };
+    const id = setInterval(tick, 35000);
+    return () => { mounted = false; clearInterval(id); };
+  }, [rpc, accountAddr, chainId]);
+
+  useEffect(() => {
+    const onMessage = async (event: MessageEvent) => {
+      try {
+        if (event.origin !== window.location.origin) return;
+        const data = event.data;
+        if (data && typeof data === 'object' && data.type === 'wc-uri' && typeof data.uri === 'string' && data.uri.startsWith('wc:')) {
+          setWcUri(data.uri);
+          try { await wcPair(data.uri); } catch {}
+        }
+      } catch {}
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
   const configReady = useMemo(() => {
     try { return Boolean(bundlerUrl && ethers.isAddress(entryPoint) && ethers.isAddress(accFactory)); } catch { return false; }
   }, [bundlerUrl, entryPoint, accFactory]);
@@ -720,10 +777,11 @@ export default function Dashboard() {
     return web3wallet;
   }
 
-  async function wcPair(){
+  async function wcPair(uriOverride?: string){
     try{
       const web3wallet = await ensureWc();
-      await web3wallet.core.pairing.pair({ uri: wcUri.trim() });
+      const uri = (uriOverride ?? wcUri).trim();
+      await web3wallet.core.pairing.pair({ uri });
       setWcStatus('Pairing…');
     }catch(e:any){ try { (toast as any)?.error?.('Could not pair', { description: e?.message || String(e) }); } catch {} }
   }
@@ -913,6 +971,12 @@ export default function Dashboard() {
     setDisposable(null);
     setOpenDisposable(false);
     try { (toast as any)?.info?.('Disposable key destroyed'); } catch {}
+  }
+  function ensureDisposableKey(){
+    if (!disposable) {
+      const w = ethers.Wallet.createRandom();
+      setDisposable({ address: w.address, privateKey: w.privateKey });
+    }
   }
 
   async function refreshTokens() {
@@ -1825,7 +1889,7 @@ export default function Dashboard() {
                     >
                       Swap
                     </Button>
-                    <Button variant="outline" onClick={() => setOpenWc(true)}>
+                    <Button variant="outline" onClick={async () => { try { await ensureWc(); if (!disposable) ensureDisposableKey(); setOpenWc(true); } catch {} }}>
                       Connect dApp
                     </Button>
                   </div>
@@ -2362,17 +2426,26 @@ export default function Dashboard() {
             </DialogHeader>
             <div className="space-y-3">
               {!wcProposal && !wcSession && (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">
-                    Paste a WalletConnect URI from the dApp to pair.
+                    Connect a dApp by opening it in the in‑app browser or pasting a WalletConnect URI.
                   </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={() => { try { window.open('/browser', 'dappBrowser', 'width=1100,height=800'); } catch {} }}>
+                      Open dApp Browser
+                    </Button>
+                    <Button variant="outline" onClick={async ()=>{ try { const txt = await navigator.clipboard.readText(); const uri = (txt||'').trim(); if (uri.startsWith('wc:')) { setWcUri(uri); await wcPair(uri); } else { try { (toast as any)?.info?.('Clipboard does not contain a WalletConnect URI'); } catch {} } } catch(e:any){ try { (toast as any)?.error?.('Could not read clipboard', { description: e?.message || String(e) }); } catch {} } }}>
+                      Pair from clipboard
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">A temporary key is in use for this session and will be auto‑destroyed when you disconnect.</p>
                   <Input
                     value={wcUri}
                     onChange={(e) => setWcUri(e.target.value)}
                     placeholder="wc:..."
                   />
                   <div className="flex justify-end">
-                    <Button onClick={wcPair} disabled={!wcUri}>
+                    <Button onClick={()=> wcPair()} disabled={!wcUri}>
                       Pair
                     </Button>
                   </div>
@@ -2441,6 +2514,7 @@ export default function Dashboard() {
               variant="ghost"
               size="sm"
               className="flex-1 justify-center gap-2"
+              onClick={() => { try { window.open('/browser', 'dappBrowser', 'width=1100,height=800'); } catch {} }}
             >
               <Compass className="h-4 w-4" />
               Browser
