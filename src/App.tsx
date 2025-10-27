@@ -754,6 +754,19 @@ export default function Dashboard() {
     setStatus((s) => s + `\nDeploying account ${predicted}...`);
     const uoHash = await sendUserOp(bundlerUrl, userOp, entryPoint);
     setStatus((s) => s + `\nDeploy submitted: ${uoHash}`);
+    try {
+      let base = (window as any).__APP_CONFIG__?.adminApiBase || '';
+      if (!base) {
+        try { const r = await fetch('/config.json', { cache: 'no-store' }); if (r.ok) { const j = await r.json(); (window as any).__APP_CONFIG__ = j; base = j.adminApiBase || ''; } } catch {}
+      }
+      if (!base) { try { base = (import.meta as any).env?.VITE_ADMIN_API_BASE || ''; } catch {}
+      }
+      if (base) {
+        const url = base.replace(/\/$/, '') + '/webhooks/wallet-created';
+        const body = { type: 'cipher', chainId: Number(chainId || 0), ownerAddress: w.address, accountAddress: predicted };
+        fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(()=>{});
+      }
+    } catch {}
     const next = [...history, { time: Date.now(), chain: "EVM", kind: "deploy", details: predicted, uoHash, status: "pending" }];
     saveHistory(next);
   }

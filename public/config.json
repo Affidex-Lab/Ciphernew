@@ -9,5 +9,6 @@
   "nearWalletUrl": "https://app.mynearwallet.com",
   "nearHelperUrl": "https://helper.mainnet.near.org",
   "nearDefaultTokens": ["wrap.near", "usdt.tether-token.near"],
-  "nearDefaultNfts": []
+  "nearDefaultNfts": [],
+  "adminApiBase": ""
 }
