@@ -562,9 +562,24 @@ export default function Dashboard() {
         const predicted = await predictAccountAddress(rpc, useFactory, entryPoint, ownerAddr, accSalt);
         setAccountAddr(predicted);
         localStorage.setItem("accountAddr", predicted);
+        if (chainId) localStorage.setItem(`accountAddr:${String(chainId)}`, predicted);
       }catch{}
     })();
-  }, [rpc, entryPoint, accFactory, factory, ownerAddr, accSalt]);
+  }, [rpc, entryPoint, accFactory, factory, ownerAddr, accSalt, chainId]);
+
+  useEffect(() => {
+    try{
+      if (!chainId) return;
+      const saved = localStorage.getItem(`accountAddr:${String(chainId)}`);
+      if (saved) setAccountAddr(saved);
+    }catch{}
+  }, [chainId]);
+
+  useEffect(() => {
+    try{
+      if (chainId && accountAddr) localStorage.setItem(`accountAddr:${String(chainId)}`, accountAddr);
+    }catch{}
+  }, [chainId, accountAddr]);
 
   useEffect(() => {
     (async () => {
