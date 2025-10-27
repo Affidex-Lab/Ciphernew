@@ -167,7 +167,7 @@ export default function Dashboard() {
     ];
     return base.map(n => ({ ...n, ...(evmNetOverrides[n.key] || {}) }));
   }, [bundlerUrl, entryPoint, accFactory, factory, policyId, evmNetOverrides]);
-  const [activeNetworkKey, setActiveNetworkKey] = useState<string>("arbitrum-one");
+  const [activeNetworkKey, setActiveNetworkKey] = useState<string>(() => localStorage.getItem("activeNetworkKey") || "ethereum-sepolia");
 
   const [accounts, setAccounts] = useState<Array<{ label: string; ownerPk: string; ownerAddr: string; accSalt: string; accountAddr: string | null }>>([]);
   const [activeAccountIdx, setActiveAccountIdx] = useState<number>(0);
@@ -688,6 +688,7 @@ export default function Dashboard() {
 
   function selectNetwork(key: string){
     setActiveNetworkKey(key);
+    try { localStorage.setItem("activeNetworkKey", key); } catch {}
     const n = NETWORKS.find(x=>x.key===key)!;
     setRpcUrl(n.rpcUrl || "");
     setBundlerUrl(n.bundlerUrl || "");
