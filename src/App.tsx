@@ -424,12 +424,23 @@ export default function Dashboard() {
         setWcProjectId(ls("wcProjectId") || serverCfg.wcProjectId || envWc || "");
 
         try {
-          const overridesArr = Array.isArray(serverCfg.evmNetworkDefaults) ? serverCfg.evmNetworkDefaults : [];
+          const envEvmDefaultsStr = (import.meta as any).env?.VITE_EVM_NETWORK_DEFAULTS || "";
+          let envEvmDefaults: any[] = [];
+          try {
+            if (envEvmDefaultsStr) {
+              envEvmDefaults = JSON.parse(envEvmDefaultsStr);
+            }
+          } catch {}
+
+          const overridesArr = [
+            ...(Array.isArray(serverCfg.evmNetworkDefaults) ? serverCfg.evmNetworkDefaults : []),
+            ...(Array.isArray(envEvmDefaults) ? envEvmDefaults : [])
+          ];
           const ov: Record<string, Partial<EvmNet>> = {};
           for (const o of overridesArr) {
             if (o && typeof o.key === "string") {
               const { key, ...rest } = o as any;
-              ov[key] = rest;
+              ov[key] = { ...(ov[key] || {}), ...rest };
             }
           }
           try {
