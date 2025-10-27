@@ -1,7 +1,8 @@
 import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Shield, Wallet, Globe } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Shield, Wallet, Globe, Chrome as ChromeIcon, Apple, Android } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 
@@ -130,6 +131,83 @@ export default function Landing() {
                 <li>Granular permissions</li>
                 <li>Recovery kits and passkeys</li>
                 <li>Smart account architecture</li>
+              </ul>
+            </motion.div>
+          </div>
+        </motion.section>
+
+        {/* Extensions (Coming soon) */}
+        <motion.section id="extension" initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }} className="py-14">
+          <div className="grid items-center gap-10 md:grid-cols-2">
+            <motion.div variants={item}>
+              <span className="mb-3 inline-flex items-center rounded-full bg-[#8876DD] px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-white">Upcoming</span>
+              <h3 className="mb-3 font-serif text-3xl font-bold">Chrome extension</h3>
+              <p className="text-gray-700">Access your wallet directly from the browser with streamlined approvals and on-site actions. Built for speed and clarity.</p>
+
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button className="group flex items-center gap-2 bg-primary text-white hover:brightness-110" onClick={e=>e.preventDefault()}>
+                      <ChromeIcon className="h-4 w-4" />
+                      <span className="transition-opacity group-hover:opacity-0">Add to Chrome</span>
+                      <span className="absolute opacity-0 transition-opacity group-hover:opacity-100">Coming soon</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Coming soon</TooltipContent>
+                </Tooltip>
+              </div>
+            </motion.div>
+
+            <motion.div variants={item} className="rounded-2xl border border-gray-200 bg-white p-8 text-left shadow-sm">
+              <div className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-500">What to expect</div>
+              <ul className="space-y-2 text-sm text-gray-800">
+                <li>One-click approvals</li>
+                <li>Site connection overview</li>
+                <li>Quick actions and notifications</li>
+              </ul>
+            </motion.div>
+          </div>
+        </motion.section>
+
+        {/* Mobile Apps (Coming soon) */}
+        <motion.section id="apps" initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }} className="py-14">
+          <div className="grid items-center gap-10 md:grid-cols-2">
+            <motion.div variants={item}>
+              <span className="mb-3 inline-flex items-center rounded-full bg-[#8876DD] px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-white">Upcoming</span>
+              <h3 className="mb-3 font-serif text-3xl font-bold">Android & iOS apps</h3>
+              <p className="text-gray-700">A native experience for everyday use. Manage balances, receive notifications, and recover securely.</p>
+
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button className="group flex items-center gap-2 border-primary text-primary hover:bg-primary hover:text-white" variant="outline" onClick={e=>e.preventDefault()}>
+                      <Apple className="h-4 w-4" />
+                      <span className="transition-opacity group-hover:opacity-0">App Store</span>
+                      <span className="absolute opacity-0 transition-opacity group-hover:opacity-100">Coming soon</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Coming soon</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button className="group flex items-center gap-2 border-primary text-primary hover:bg-primary hover:text-white" variant="outline" onClick={e=>e.preventDefault()}>
+                      <Android className="h-4 w-4" />
+                      <span className="transition-opacity group-hover:opacity-0">Google Play</span>
+                      <span className="absolute opacity-0 transition-opacity group-hover:opacity-100">Coming soon</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Coming soon</TooltipContent>
+                </Tooltip>
+              </div>
+            </motion.div>
+
+            <motion.div variants={item} className="rounded-2xl border border-gray-200 bg-white p-8 text-left shadow-sm">
+              <div className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-500">Highlights</div>
+              <ul className="space-y-2 text-sm text-gray-800">
+                <li>Native notifications</li>
+                <li>Biometric authentication</li>
+                <li>Offline backup support</li>
               </ul>
             </motion.div>
           </div>
