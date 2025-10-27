@@ -385,6 +385,19 @@ export default function Dashboard() {
     } catch {}
   }
 
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("evm:migration:v1") !== "1") {
+        const keys = ["bundlerUrl","rpcUrl","entryPoint","factory","accFactory","policyId"]; // keep wcProjectId
+        for (const k of keys) localStorage.removeItem(k);
+        const nk = localStorage.getItem("activeNetworkKey") || "ethereum-sepolia";
+        localStorage.setItem("activeNetworkKey", nk);
+        localStorage.setItem("evm:migration:v1", "1");
+        try { selectNetwork(nk); } catch {}
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => { loadHistory(); }, []);
   useEffect(() => { (async()=>{ try{ await updatePendingHistory(); }catch{} })(); }, [bundlerUrl]);
 
