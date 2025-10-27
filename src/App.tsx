@@ -699,6 +699,20 @@ export default function Dashboard() {
     saveConfig();
   }
 
+  useEffect(() => {
+    try {
+      const n = NETWORKS.find(x=>x.key===activeNetworkKey);
+      if (n) {
+        setRpcUrl(n.rpcUrl || "");
+        setBundlerUrl(n.bundlerUrl || "");
+        setEntryPoint(n.entryPoint || "");
+        setAccFactory(n.accountFactory || "");
+        setFactory(n.disposableFactory || "");
+        setPolicyId(n.policyId || "");
+      }
+    } catch {}
+  }, [activeNetworkKey, NETWORKS]);
+
   function createNewAccount(){
     const w = ethers.Wallet.createRandom();
     const s = ethers.hexlify(ethers.randomBytes(32));
