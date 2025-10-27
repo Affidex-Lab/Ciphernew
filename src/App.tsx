@@ -1112,9 +1112,21 @@ export default function Dashboard() {
     }catch(e:any){ try { (toast as any)?.error?.('Could not add NFT collection', { description: e?.message || String(e) }); } catch {} }
   }
 
-  async function handleConnectNear(){}
+  async function handleConnectNear(){
+    try{
+      await openWalletSelector();
+      const acc = await getActiveNearAccountId();
+      if (acc){
+        setNearAccountId(acc);
+        const bal = await fetchNearBalance(acc).catch(()=>"0");
+        setNearBalance(formatYoctoToNear(bal));
+      }
+    }catch(e:any){ try { (toast as any)?.error?.('NEAR connect failed', { description: e?.message || String(e) }); } catch {} }
+  }
 
-  async function handleDisconnectNear(){}
+  async function handleDisconnectNear(){
+    try{ await selectorDisconnect(); setNearAccountId(null); setNearBalance(""); }catch{}
+  }
 
   async function sendNearFlow(){
     try{
@@ -1357,7 +1369,7 @@ export default function Dashboard() {
                 <CardContent className="space-y-3">
                   <p className="text-sm text-muted-foreground">Connect your NEAR account or create a new one.</p>
                   <div className="flex flex-wrap gap-2">
-                    <Button onClick={async()=>{ try{ await openWalletSelector(); const acc = await getActiveNearAccountId(); if (acc){ setNearAccountId(acc); const bal = await fetchNearBalance(acc).catch(()=>"0"); setNearBalance(formatYoctoToNear(bal)); } }catch(e:any){ try { (toast as any)?.error?.('NEAR connect failed', { description: e?.message || String(e) }); } catch {} } }>Connect NEAR Wallet</Button>
+                    <Button onClick={handleConnectNear}>Connect NEAR Wallet</Button>
                     <Button variant="outline" onClick={async()=>{ const cfg = await getNearConfig(); window.open(`${cfg.walletUrl}/create`, '_blank'); }}>Create NEAR Account</Button>
                   </div>
                 </CardContent>
