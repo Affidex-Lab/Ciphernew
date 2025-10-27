@@ -134,7 +134,8 @@ export default function Dashboard() {
   const [restoreCode, setRestoreCode] = useState<string>("");
   const [restoreFile, setRestoreFile] = useState<string>("");
 
-  const rpc = useMemo(() => rpcUrl || bundlerUrl || "", [rpcUrl, bundlerUrl]);
+  const selectedNet = useMemo(() => NETWORKS.find(n => n.key === activeNetworkKey), [NETWORKS, activeNetworkKey]);
+  const rpc = useMemo(() => selectedNet?.rpcUrl || rpcUrl || "", [selectedNet, rpcUrl]);
   
   type EvmNet = {
     key: string;
