@@ -432,6 +432,14 @@ export default function Dashboard() {
               ov[key] = rest;
             }
           }
+          try {
+            const loc = JSON.parse(localStorage.getItem("evm:overrides") || "{}");
+            if (loc && typeof loc === 'object') {
+              for (const k of Object.keys(loc)) {
+                ov[k] = { ...(ov[k] || {}), ...(loc[k] || {}) };
+              }
+            }
+          } catch {}
           setEvmNetOverrides(ov);
         } catch {}
       } catch {}
@@ -677,13 +685,25 @@ export default function Dashboard() {
   }, [accountAddr, configReady]);
 
   function saveConfig() {
-    localStorage.setItem("bundlerUrl", bundlerUrl);
-    localStorage.setItem("entryPoint", entryPoint);
-    localStorage.setItem("accFactory", accFactory);
-    localStorage.setItem("factory", factory);
-    localStorage.setItem("rpcUrl", rpcUrl);
-    localStorage.setItem("policyId", policyId);
-    localStorage.setItem("wcProjectId", wcProjectId);
+    try {
+      localStorage.setItem("wcProjectId", wcProjectId);
+      const key = activeNetworkKey;
+      const ov: Record<string, Partial<EvmNet>> = { ...(evmNetOverrides || {}) };
+      const cur = ov[key] || {};
+      ov[key] = {
+        ...cur,
+        bundlerUrl: bundlerUrl || cur.bundlerUrl || "",
+        rpcUrl: rpcUrl || cur.rpcUrl || "",
+        entryPoint: entryPoint || cur.entryPoint || "",
+        accountFactory: accFactory || cur.accountFactory || "",
+        disposableFactory: factory || cur.disposableFactory || "",
+        policyId: policyId || cur.policyId || "",
+      };
+      localStorage.setItem("evm:overrides", JSON.stringify(ov));
+      setEvmNetOverrides(ov);
+    } catch {
+      // ignore
+    }
   }
 
   function selectNetwork(key: string){
