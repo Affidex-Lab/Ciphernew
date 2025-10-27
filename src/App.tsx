@@ -87,6 +87,9 @@ export default function Dashboard() {
   const tokenRefreshInFlight = useRef(false);
   const priceRefreshInFlight = useRef(false);
 
+  const [debugEvm, setDebugEvm] = useState<boolean>(()=>{ try{ const p=new URLSearchParams(window.location.search); return p.get('debug')==='1' || localStorage.getItem('debug:evm')==='1'; }catch{return false;}});
+  const [debugLastEth, setDebugLastEth] = useState<string>("");
+
   type Token = { address: string; symbol: string; name: string; decimals: number; balance: string };
   const [tokens, setTokens] = useState<Token[]>([]);
   const [newTokenAddr, setNewTokenAddr] = useState<string>("");
@@ -565,7 +568,8 @@ export default function Dashboard() {
         if (!provider) { setBalance(""); return; }
         const bal = await provider.getBalance(active);
         setBalance(ethers.formatEther(bal));
-      } catch {}
+        try{ setDebugLastEth('ok @ '+new Date().toLocaleTimeString()); }catch{}
+      } catch (e:any) { try{ setDebugLastEth('error: '+(e?.message||'')); }catch{} }
     })();
   }, [rpc, accountAddr, chainId, ownerAddr]);
 
@@ -620,7 +624,8 @@ export default function Dashboard() {
         if (!provider) return;
         const bal = await provider.getBalance(active);
         if (mounted) setBalance(ethers.formatEther(bal));
-      } catch {}
+        try{ setDebugLastEth('ok @ '+new Date().toLocaleTimeString()); }catch{}
+      } catch (e:any) { try{ setDebugLastEth('error: '+(e?.message||'')); }catch{} }
       finally { ethRefreshInFlight.current = false; }
     };
     const id = setInterval(tick, 20000);
@@ -2595,6 +2600,14 @@ export default function Dashboard() {
             </Button>
           </div>
         </nav>
+        {debugEvm && stack==='evm' && (
+          <div className="fixed bottom-16 right-2 z-50 rounded bg-black/70 text-white p-2 text-xs space-y-1">
+            <div>chainId: {String(chainId||'-')}</div>
+            <div>active: {getActiveEvmAddress() || '-'}</div>
+            <div>eth: {balance || '0'}</div>
+            <div>last: {debugLastEth || '-'}</div>
+          </div>
+        )}
         <Toaster richColors position="top-center" />
       </main>
     </div>
