@@ -1161,7 +1161,7 @@ export default function Dashboard() {
                     const active = NETWORKS.find((n) => n.key === activeNetworkKey);
                     const filtered = NETWORKS.filter((n) => (netFilter === "mainnet" ? !n.isTestnet : n.isTestnet));
                     const inFiltered = filtered.some((n) => n.key === activeNetworkKey);
-                    const list = inFiltered ? filtered : [active!, ...filtered.filter((n) => n.key !== activeNetworkKey)];
+                    const list = filtered;
                     return (
                       <>
                         {!inFiltered && (
