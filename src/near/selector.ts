@@ -27,6 +27,11 @@ export async function openWalletSelector() {
   modal?.show();
 }
 
+export async function getWallet() {
+  const s = await ensureSelector();
+  return s.wallet();
+}
+
 export async function disconnectNear() {
   const s = await ensureSelector();
   const wallet = await s.wallet();

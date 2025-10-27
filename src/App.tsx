@@ -36,7 +36,7 @@ import { getSdkError } from "@walletconnect/utils";
 import { ensureNearKey, } from "./near/keyring";
 import { fetchNearBalance, formatYoctoToNear, getNearPublicKey, sendNear, explorerTxUrl, emitAnalytics } from "./near/helpers";
 import { getNearConfig } from "./near/client";
-import { openWalletSelector, disconnectNear as selectorDisconnect, getActiveNearAccountId } from "./near/selector";
+import { openWalletSelector, disconnectNear as selectorDisconnect, getActiveNearAccountId, getWallet as getNearWallet, ensureSelector as ensureNearSelector } from "./near/selector";
 import { KeyPair } from "near-api-js";
 
 export default function Dashboard() {
@@ -976,6 +976,7 @@ export default function Dashboard() {
   const [nearReceiver, setNearReceiver] = useState("");
   const [openNearDisposable, setOpenNearDisposable] = useState(false);
   const [nearDisposable, setNearDisposable] = useState<{ publicKey: string; secretKey: string } | null>(null);
+  const [nearKeyAttached, setNearKeyAttached] = useState<boolean>(false);
   const [nearAmount, setNearAmount] = useState("");
 
   type NearToken = { contractId: string; symbol: string; name: string; decimals: number; balance: string };
@@ -1638,9 +1639,42 @@ export default function Dashboard() {
                         <div className="truncate font-mono text-xs">{nearDisposable.secretKey}</div>
                       </div>
                       <div className="flex justify-end gap-2 pt-2">
-                        <Button variant="outline" onClick={()=>{ setNearDisposable(null); setOpenNearDisposable(false); try { (toast as any)?.info?.('Session ended'); } catch {} }}>End session</Button>
+                        <Button variant="outline" onClick={async()=>{
+                          try{
+                            if (nearDisposable){
+                              const wallet = await getNearWallet();
+                              try{ await wallet.signAndSendTransaction({ signerId: nearAccountId!, receiverId: nearAccountId!, actions: [ { type: 'DeleteKey', params: { publicKey: nearDisposable.publicKey } } ] }); setNearKeyAttached(false); }catch{}
+                            }
+                          }catch{}
+                          setNearDisposable(null);
+                          setOpenNearDisposable(false);
+                          try { (toast as any)?.info?.('Session ended'); } catch {}
+                        }}>End session</Button>
+                        <Button onClick={async()=>{
+                          try{
+                            if (!nearDisposable || !nearAccountId){ try { (toast as any)?.info?.('Connect wallet first'); } catch {} ; return; }
+                            const receiverId = prompt('Receiver (contract/account) for permission', nearAccountId) || nearAccountId;
+                            const allowanceNear = prompt('Allowance (NEAR) for function calls', '0.25') || '0.25';
+                            const methods = prompt('Allowed method names (comma separated, blank = any)', '') || '';
+                            const allowance = (()=>{ try{ return BigInt(Math.floor(parseFloat(allowanceNear)*1e24).toString()); }catch{ return BigInt(0); } })();
+                            const methodNames = methods.split(',').map(s=>s.trim()).filter(Boolean);
+                            const wallet = await getNearWallet();
+                            await wallet.signAndSendTransaction({ signerId: nearAccountId, receiverId, actions: [ { type: 'AddKey', params: { publicKey: nearDisposable.publicKey, accessKey: { permission: { type: 'FunctionCall', receiverId, methodNames, allowance } } } } ] });
+                            setNearKeyAttached(true);
+                            try { (toast as any)?.success?.('Session key attached'); } catch {}
+                          }catch(e:any){ try { (toast as any)?.error?.('Could not attach key', { description: e?.message || String(e) }); } catch {} }
+                        }}>{nearKeyAttached ? 'Re-attach' : 'Attach to account'}</Button>
+                        <Button variant="outline" onClick={async()=>{
+                          try{
+                            if (!nearDisposable || !nearAccountId){ return; }
+                            const wallet = await getNearWallet();
+                            await wallet.signAndSendTransaction({ signerId: nearAccountId, receiverId: nearAccountId, actions: [ { type: 'DeleteKey', params: { publicKey: nearDisposable.publicKey } } ] });
+                            setNearKeyAttached(false);
+                            try { (toast as any)?.success?.('Access key removed'); } catch {}
+                          }catch(e:any){ try { (toast as any)?.error?.('Remove key failed', { description: e?.message || String(e) }); } catch {} }
+                        }}>Remove key</Button>
                       </div>
-                      <div className="text-xs text-muted-foreground">This key is kept only in memory and will be destroyed when you end the session or reload.</div>
+                      <div className="text-xs text-muted-foreground">This key is kept only in memory. Attaching it adds an on-chain access key; you can remove it anytime.</div>
                     </>
                   ) : (
                     <div className="text-sm text-muted-foreground">No active session.</div>
