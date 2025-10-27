@@ -160,7 +160,7 @@ export default function Dashboard() {
     ];
     return base.map(n => ({ ...n, ...(evmNetOverrides[n.key] || {}) }));
   }, [bundlerUrl, entryPoint, accFactory, factory, policyId, evmNetOverrides]);
-  const [activeNetworkKey, setActiveNetworkKey] = useState<string>("arbitrum-sepolia");
+  const [activeNetworkKey, setActiveNetworkKey] = useState<string>("arbitrum-one");
 
   const [accounts, setAccounts] = useState<Array<{ label: string; ownerPk: string; ownerAddr: string; accSalt: string; accountAddr: string | null }>>([]);
   const [activeAccountIdx, setActiveAccountIdx] = useState<number>(0);
@@ -551,6 +551,20 @@ export default function Dashboard() {
       } catch {}
     })();
   }, [rpc, accountAddr]);
+
+  useEffect(() => {
+    (async () => {
+      try{
+        if (!rpc || !entryPoint) return;
+        if (!ownerAddr || !accSalt) return;
+        const useFactory = await resolveFactoryAddr().catch(()=>null as any);
+        if (!useFactory) return;
+        const predicted = await predictAccountAddress(rpc, useFactory, entryPoint, ownerAddr, accSalt);
+        setAccountAddr(predicted);
+        localStorage.setItem("accountAddr", predicted);
+      }catch{}
+    })();
+  }, [rpc, entryPoint, accFactory, factory, ownerAddr, accSalt]);
 
   useEffect(() => {
     (async () => {
