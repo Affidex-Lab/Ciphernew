@@ -492,6 +492,8 @@ export default function Dashboard() {
           if (seed.length) {
             localStorage.setItem(key, JSON.stringify(seed));
             await refreshTokens();
+          } else {
+            try { await discoverTokens(); } catch {}
           }
         }
       } catch {}
@@ -1889,7 +1891,7 @@ export default function Dashboard() {
                     >
                       Swap
                     </Button>
-                    <Button variant="outline" onClick={async () => { try { await ensureWc(); if (!disposable) ensureDisposableKey(); setOpenWc(true); } catch {} }}>
+                    <Button variant="outline" onClick={() => { try { if (!disposable) ensureDisposableKey(); setOpenWc(true); } catch {} }}>
                       Connect dApp
                     </Button>
                   </div>
@@ -1918,6 +1920,13 @@ export default function Dashboard() {
                       }}
                     >
                       + Add
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => { try { await discoverTokens(); } catch {} }}
+                    >
+                      Discover
                     </Button>
                   </div>
                   <TabsContent value="tokens" className="mt-2">
@@ -2430,6 +2439,9 @@ export default function Dashboard() {
                   <p className="text-sm text-muted-foreground">
                     Connect a dApp by opening it in the in‑app browser or pasting a WalletConnect URI.
                   </p>
+                  {!wcProjectId && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">WalletConnect Project ID is not set in Settings. You can still open the dApp Browser and copy a URI, but pairing will require setting the Project ID.</p>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     <Button onClick={() => { try { window.open('/browser', 'dappBrowser', 'width=1100,height=800'); } catch {} }}>
                       Open dApp Browser
