@@ -1,4 +1,4 @@
-import { Pool, type QueryResult } from 'pg';
+import { Pool, type QueryResult, type QueryResultRow } from 'pg';
 import pino from 'pino';
 
 export const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
@@ -13,7 +13,7 @@ export const pool = new Pool({
   ssl: (process.env.PGSSL?.toLowerCase() === 'true') ? { rejectUnauthorized: false } : undefined,
 });
 
-export async function query<T = any>(text: string, params?: any[]): Promise<QueryResult<T>>{
+export async function query<T extends QueryResultRow = any>(text: string, params?: any[]): Promise<QueryResult<T>>{
   return pool.query<T>(text, params as any);
 }
 
