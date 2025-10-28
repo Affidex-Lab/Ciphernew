@@ -531,18 +531,26 @@ export default function Dashboard() {
   }, [activeNetworkKey, NETWORKS]);
 
   useEffect(() => {
-    (async () => {
+    const assetId = (NETWORKS.find((n) => n.key === activeNetworkKey)?.assetId) || "ethereum";
+    let timer: any;
+    let mounted = true;
+    const fetchPrice = async () => {
+      if (priceRefreshInFlight.current) return;
+      priceRefreshInFlight.current = true;
       try {
-        const id = "near-protocol";
-        const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`);
+        const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${assetId}&vs_currencies=usd`);
         if (res.ok) {
           const j = await res.json();
-          const p = Number(j[id]?.usd) || 0;
-          setNearUsdPrice(p);
+          const p = Number(j[assetId]?.usd) || 0;
+          if (mounted) setUsdPrice(p);
         }
       } catch {}
-    })();
-  }, []);
+      finally { priceRefreshInFlight.current = false; }
+    };
+    fetchPrice();
+    timer = setInterval(fetchPrice, 60000);
+    return () => { mounted = false; clearInterval(timer); };
+  }, [activeNetworkKey, NETWORKS]);
 
   useEffect(() => {
     (async () => {
@@ -1108,6 +1116,7 @@ export default function Dashboard() {
     } catch { return null; }
   }
 
+
   async function refreshTokens() {
     try {
       if (!rpc) return;
@@ -1166,8 +1175,6 @@ export default function Dashboard() {
               t.valueUsd = isFinite(val) ? val : undefined;
             }
           }
-        } catch {}
-      }
         } catch {}
       }
 
@@ -1239,6 +1246,8 @@ export default function Dashboard() {
   const [nearDisposable, setNearDisposable] = useState<{ publicKey: string; secretKey: string } | null>(null);
   const [nearKeyAttached, setNearKeyAttached] = useState<boolean>(false);
   const [nearAmount, setNearAmount] = useState("");
+  const [nearUsdPrice, setNearUsdPrice] = useState<number>(0);
+  const [nearNetKey, setNearNetKey] = useState<"mainnet"|"testnet">("mainnet");
 
   type NearToken = { contractId: string; symbol: string; name: string; decimals: number; balance: string };
   const [nearTokens, setNearTokens] = useState<NearToken[]>([]);
@@ -1262,7 +1271,7 @@ export default function Dashboard() {
     } catch {}
   }
 
-  useEffect(() => { (async()=>{ try{ await refreshNearSession(); }catch{} })(); }, []);
+  useEffect(() => { (async()=>{ try{ await refreshNearSession(); const cfg = await getNearConfig(); setNearNetKey(cfg.network === "testnet" ? "testnet" : "mainnet"); }catch{} })(); }, []);
 
   useEffect(()=>{
     (async()=>{
@@ -1403,6 +1412,19 @@ export default function Dashboard() {
     }catch(e:any){ try { (toast as any)?.error?.('NEAR transfer failed', { description: e?.message || String(e) }); } catch {} }
   }
 
+  useEffect(() => { (async()=>{ try{ const id = "near"; const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`); if(res.ok){ const j = await res.json(); setNearUsdPrice(Number(j[id]?.usd)||0); } }catch{} })(); }, []);
+
+  function selectNearNetwork(key: "mainnet"|"testnet"){
+    const map = {
+      mainnet: { network: "mainnet", nodeUrl: "https://rpc.mainnet.near.org", walletUrl: "https://app.mynearwallet.com", helperUrl: "https://helper.mainnet.near.org" },
+      testnet: { network: "testnet", nodeUrl: "https://rpc.testnet.near.org", walletUrl: "https://testnet.mynearwallet.com", helperUrl: "https://helper.testnet.near.org" },
+    } as const;
+    const cfg = map[key];
+    persistNearConfig({ network: cfg.network as any, nodeUrl: cfg.nodeUrl, walletUrl: cfg.walletUrl, helperUrl: cfg.helperUrl });
+    setNearNetKey(key);
+    (async()=>{ try{ await refreshNearSession(); await refreshNearTokens(); await refreshNearNfts(); }catch{} })();
+  }
+
   return (
     <div className="min-h-screen w-full overflow-x-hidden dark:bg-gradient-to-b dark:from-black via-background to-background pb-20">
       <header className="mx-auto w-full max-w-6xl px-4 py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1517,7 +1539,19 @@ export default function Dashboard() {
           )}
 
           {stack === "near" && (
-            <div className="text-sm text-muted-foreground">NEAR Mainnet</div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2 max-w-full sm:max-w-[200px] overflow-hidden">
+                  <span className="truncate">{nearNetKey === "mainnet" ? "NEAR Mainnet" : "NEAR Testnet"}</span>
+                  <ChevronDown className="h-4 w-4 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuLabel>NEAR Network</DropdownMenuLabel>
+                <DropdownMenuItem onClick={()=> selectNearNetwork("mainnet")}>NEAR Mainnet</DropdownMenuItem>
+                <DropdownMenuItem onClick={()=> selectNearNetwork("testnet")}>NEAR Testnet</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
@@ -1643,8 +1677,13 @@ export default function Dashboard() {
                   <div className="flex items-end justify-between">
                     <div className="space-y-1">
                       <div className="text-xs text-muted-foreground">Total</div>
+<<<<<<< HEAD
                       <div className="text-4xl font-semibold tracking-tight">US ${(parseFloat(nearBalance || '0') * nearUsdPrice || 0).toFixed(2)}</div>
                       <div className="text-xs text-muted-foreground">{nearBalance || '0.00'} Ⓝ</div>
+=======
+                      <div className="text-4xl font-semibold tracking-tight">US ${(Number(nearBalance || 0) * (nearUsdPrice || 0)).toFixed(2)}</div>
+                      <div className="text-xs text-muted-foreground">{nearBalance || '0.00'} Ⓝ · {nearAccountId}</div>
+>>>>>>> origin/main
                     </div>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -2065,7 +2104,11 @@ export default function Dashboard() {
                     >
                       Swap
                     </Button>
+<<<<<<< HEAD
                     <Button variant="outline" onClick={() => { try { if (!disposable) ensureDisposableKey(); setOpenWc(true); } catch {} }}>
+=======
+                    <Button variant="outline" onClick={async () => { try { await ensureWc(); if (!disposable) ensureDisposableKey(); setOpenWc(true); } catch {} }}>
+>>>>>>> origin/main
                       Connect dApp
                     </Button>
                   </div>
@@ -2627,9 +2670,12 @@ export default function Dashboard() {
                   <p className="text-sm text-muted-foreground">
                     Connect a dApp by opening it in the in‑app browser or pasting a WalletConnect URI.
                   </p>
+<<<<<<< HEAD
                   {!wcProjectId && (
                     <p className="text-xs text-amber-600 dark:text-amber-400">WalletConnect Project ID is not set in Settings. You can still open the dApp Browser and copy a URI, but pairing will require setting the Project ID.</p>
                   )}
+=======
+>>>>>>> origin/main
                   <div className="flex flex-wrap gap-2">
                     <Button onClick={() => { try { window.open('/browser', 'dappBrowser', 'width=1100,height=800'); } catch {} }}>
                       Open dApp Browser
