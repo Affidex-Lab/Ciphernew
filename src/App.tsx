@@ -1669,16 +1669,10 @@ export default function Dashboard() {
 
             <Tabs defaultValue="tokens" className="w-full mt-4" onValueChange={(v)=>{ /* store if needed */ }}>
               <div className="flex flex-wrap items-center justify-between gap-2">
-<<<<<<< HEAD
-                <TabsList>
+                <TabsList className="p-3">
                   <TabsTrigger value="tokens">Tokens</TabsTrigger>
                   <TabsTrigger value="defi">DeFi</TabsTrigger>
-                  <TabsTrigger value="nfts">NFTs</TabsTrigger>
-=======
-                <TabsList className="p-3">
-                  <TabsTrigger value="nearTokens">Tokens</TabsTrigger>
-                  <TabsTrigger value="nearNfts">Collectibles</TabsTrigger>
->>>>>>> 373525e (Capy jam: token cards UI for EVM/NEAR, ERC-20 price + 24h change via CoinGecko, logos from token lists; rename NFTs tab to Collectibles. Follow-up to PR #13.)
+                  <TabsTrigger value="nfts">Collectibles</TabsTrigger>
                 </TabsList>
                 <div className="flex gap-2">
                   <Button
