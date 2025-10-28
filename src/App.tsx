@@ -134,9 +134,7 @@ export default function Dashboard() {
   const [restoreCode, setRestoreCode] = useState<string>("");
   const [restoreFile, setRestoreFile] = useState<string>("");
 
-  const selectedNet = useMemo(() => NETWORKS.find(n => n.key === activeNetworkKey), [NETWORKS, activeNetworkKey]);
-  const rpc = useMemo(() => selectedNet?.rpcUrl || rpcUrl || "", [selectedNet, rpcUrl]);
-  
+
   type EvmNet = {
     key: string;
     name: string;
@@ -169,6 +167,8 @@ export default function Dashboard() {
     return base.map(n => ({ ...n, ...(evmNetOverrides[n.key] || {}) }));
   }, [bundlerUrl, entryPoint, accFactory, factory, policyId, evmNetOverrides]);
   const [activeNetworkKey, setActiveNetworkKey] = useState<string>(() => localStorage.getItem("activeNetworkKey") || "ethereum-sepolia");
+  const selectedNet = useMemo(() => NETWORKS.find(n => n.key === activeNetworkKey), [NETWORKS, activeNetworkKey]);
+  const rpc = useMemo(() => selectedNet?.rpcUrl || rpcUrl || "", [selectedNet, rpcUrl]);
 
   const [accounts, setAccounts] = useState<Array<{ label: string; ownerPk: string; ownerAddr: string; accSalt: string; accountAddr: string | null }>>([]);
   const [activeAccountIdx, setActiveAccountIdx] = useState<number>(0);
