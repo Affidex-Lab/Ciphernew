@@ -1677,13 +1677,8 @@ export default function Dashboard() {
                   <div className="flex items-end justify-between">
                     <div className="space-y-1">
                       <div className="text-xs text-muted-foreground">Total</div>
-<<<<<<< HEAD
-                      <div className="text-4xl font-semibold tracking-tight">US ${(parseFloat(nearBalance || '0') * nearUsdPrice || 0).toFixed(2)}</div>
-                      <div className="text-xs text-muted-foreground">{nearBalance || '0.00'} Ⓝ</div>
-=======
                       <div className="text-4xl font-semibold tracking-tight">US ${(Number(nearBalance || 0) * (nearUsdPrice || 0)).toFixed(2)}</div>
                       <div className="text-xs text-muted-foreground">{nearBalance || '0.00'} Ⓝ · {nearAccountId}</div>
->>>>>>> origin/main
                     </div>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -2104,11 +2099,7 @@ export default function Dashboard() {
                     >
                       Swap
                     </Button>
-<<<<<<< HEAD
-                    <Button variant="outline" onClick={() => { try { if (!disposable) ensureDisposableKey(); setOpenWc(true); } catch {} }}>
-=======
                     <Button variant="outline" onClick={async () => { try { await ensureWc(); if (!disposable) ensureDisposableKey(); setOpenWc(true); } catch {} }}>
->>>>>>> origin/main
                       Connect dApp
                     </Button>
                   </div>
@@ -2670,12 +2661,9 @@ export default function Dashboard() {
                   <p className="text-sm text-muted-foreground">
                     Connect a dApp by opening it in the in‑app browser or pasting a WalletConnect URI.
                   </p>
-<<<<<<< HEAD
                   {!wcProjectId && (
                     <p className="text-xs text-amber-600 dark:text-amber-400">WalletConnect Project ID is not set in Settings. You can still open the dApp Browser and copy a URI, but pairing will require setting the Project ID.</p>
                   )}
-=======
->>>>>>> origin/main
                   <div className="flex flex-wrap gap-2">
                     <Button onClick={() => { try { window.open('/browser', 'dappBrowser', 'width=1100,height=800'); } catch {} }}>
                       Open dApp Browser
