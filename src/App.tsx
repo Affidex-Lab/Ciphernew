@@ -89,6 +89,7 @@ export default function Dashboard() {
 
   const [debugEvm, setDebugEvm] = useState<boolean>(()=>{ try{ const p=new URLSearchParams(window.location.search); return p.get('debug')==='1' || localStorage.getItem('debug:evm')==='1'; }catch{return false;}});
   const [debugLastEth, setDebugLastEth] = useState<string>("");
+  const [debugRpc, setDebugRpc] = useState<string>("");
 
   type Token = { address: string; symbol: string; name: string; decimals: number; balance: string };
   const [tokens, setTokens] = useState<Token[]>([]);
@@ -169,6 +170,7 @@ export default function Dashboard() {
   const [activeNetworkKey, setActiveNetworkKey] = useState<string>(() => localStorage.getItem("activeNetworkKey") || "ethereum-sepolia");
   const selectedNet = useMemo(() => NETWORKS.find(n => n.key === activeNetworkKey), [NETWORKS, activeNetworkKey]);
   const rpc = useMemo(() => selectedNet?.rpcUrl || rpcUrl || "", [selectedNet, rpcUrl]);
+  useEffect(()=>{ try{ setDebugRpc(rpc||''); }catch{} }, [rpc]);
 
   const [accounts, setAccounts] = useState<Array<{ label: string; ownerPk: string; ownerAddr: string; accSalt: string; accountAddr: string | null }>>([]);
   const [activeAccountIdx, setActiveAccountIdx] = useState<number>(0);
@@ -474,12 +476,36 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       try {
-        if (!rpc) return;
+        if (!rpc || !selectedNet) return;
         const cid = await getChainId(rpc);
-        setChainId(cid);
+        if (cid !== BigInt(selectedNet.chainId)) {
+          if (selectedNet.key === 'ethereum-sepolia') {
+            const candidates = [
+              'https://rpc.sepolia.org',
+              'https://ethereum-sepolia-rpc.publicnode.com',
+              'https://ethereum-sepolia.blockpi.network/v1/rpc/public'
+            ];
+            for (const u of candidates) {
+              try {
+                const c2 = await getChainId(u);
+                if (c2 === BigInt(11155111)) {
+                  setRpcUrl(u);
+                  const ov = { ...(evmNetOverrides||{}) };
+                  ov['ethereum-sepolia'] = { ...(ov['ethereum-sepolia']||{}), rpcUrl: u };
+                  setEvmNetOverrides(ov);
+                  localStorage.setItem('evm:overrides', JSON.stringify(ov));
+                  setChainId(c2);
+                  return;
+                }
+              } catch {}
+            }
+          }
+        } else {
+          setChainId(cid);
+        }
       } catch {}
     })();
-  }, [rpc]);
+  }, [rpc, selectedNet]);
 
   useEffect(() => {
     const assetId = (NETWORKS.find((n) => n.key === activeNetworkKey)?.assetId) || "ethereum";
@@ -2664,6 +2690,7 @@ export default function Dashboard() {
           <div className="fixed bottom-16 right-2 z-50 rounded bg-black/70 text-white p-2 text-xs space-y-1">
             <div>chainId: {String(chainId||'-')}</div>
             <div>active: {getActiveEvmAddress() || '-'}</div>
+            <div>rpc: {debugRpc || '-'}</div>
             <div>eth: {balance || '0'}</div>
             <div>last: {debugLastEth || '-'}</div>
           </div>
