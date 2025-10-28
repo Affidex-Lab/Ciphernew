@@ -35,9 +35,10 @@ import { getSdkError } from "@walletconnect/utils";
 // NEAR imports
 import { ensureNearKey, } from "./near/keyring";
 import { fetchNearBalance, formatYoctoToNear, getNearPublicKey, sendNear, explorerTxUrl, emitAnalytics } from "./near/helpers";
-import { getNearConfig } from "./near/client";
+import { getNearConfig, persistNearConfig } from "./near/client";
 import { openWalletSelector, disconnectNear as selectorDisconnect, getActiveNearAccountId, getWallet as getNearWallet, ensureSelector as ensureNearSelector } from "./near/selector";
 import { KeyPair } from "near-api-js";
+import { fetchErc20Prices } from "./lib/utils";
 
 export default function Dashboard() {
   //Nav Variable
@@ -91,11 +92,11 @@ export default function Dashboard() {
   const [debugLastEth, setDebugLastEth] = useState<string>("");
   const [debugRpc, setDebugRpc] = useState<string>("");
 
-  type Token = { address: string; symbol: string; name: string; decimals: number; balance: string };
+  type Token = { address: string; symbol: string; name: string; decimals: number; balance: string; priceUsd?: number; change24h?: number; valueUsd?: number; logoURI?: string };
   const [tokens, setTokens] = useState<Token[]>([]);
   const [newTokenAddr, setNewTokenAddr] = useState<string>("");
 
-  type KnownToken = { address: string; symbol: string; name: string; decimals: number };
+  type KnownToken = { address: string; symbol: string; name: string; decimals: number; logoURI?: string };
   const KNOWN_TOKENS: Record<string, KnownToken[]> = {
     "42161": [
       { address: "0x82af49447d8a07e3bd95bd0d56f35241523fbab1", symbol: "WETH", name: "Wrapped Ether", decimals: 18 },
@@ -585,7 +586,7 @@ export default function Dashboard() {
               const addr = (t.address || "").toLowerCase();
               if (!addr) continue;
               if (!arr.some(x=>x.address.toLowerCase()===addr)){
-                arr.push({ address: t.address, symbol: t.symbol||"", name: t.name||"", decimals: Number(t.decimals||18) });
+                arr.push({ address: t.address, symbol: t.symbol||"", name: t.name||"", decimals: Number(t.decimals||18), logoURI: (t.logoURI || t.logoUri || undefined) });
               }
             }
           }
@@ -1116,6 +1117,12 @@ export default function Dashboard() {
       if (!provider) return;
       const key = `tokens:${String(chainId||"")}`;
       const stored = JSON.parse(localStorage.getItem(key) || "[]") as string[];
+
+      const cidStr = String(chainId || "");
+      const known = ((tokenIndex as any)[cidStr] || (KNOWN_TOKENS as any)[cidStr] || []) as Array<any>;
+      const logoMap: Record<string, string> = {};
+      for (const kt of known) { try { if (kt?.address && kt?.logoURI) logoMap[String(kt.address).toLowerCase()] = kt.logoURI; } catch {} }
+
       const next: Token[] = [];
       for (const addr of stored) {
         const a = addr as string;
@@ -1131,9 +1138,38 @@ export default function Dashboard() {
           try { symbol = await erc20.symbol(); } catch {}
           try { decimals = Number(await erc20.decimals()); } catch {}
           try { raw = await erc20.balanceOf(active); } catch {}
-          next.push({ address: a, name: name||"Token", symbol: symbol||"ERC20", decimals, balance: ethers.formatUnits(raw, decimals) });
+          const balance = ethers.formatUnits(raw, decimals);
+          next.push({ address: a, name: name||"Token", symbol: symbol||"ERC20", decimals, balance, logoURI: logoMap[a.toLowerCase()] });
         } catch {}
       }
+
+      const platform = (() => {
+        const cid = Number(chainId || 0);
+        if (cid === 1) return 'ethereum';
+        if (cid === 42161) return 'arbitrum-one';
+        if (cid === 43114) return 'avalanche';
+        return null;
+      })();
+
+      if (platform && next.length) {
+        try {
+          const addrs = next.map(t => t.address);
+          const prices = await fetchErc20Prices(platform, addrs);
+          for (const t of next) {
+            const p = prices[t.address.toLowerCase()];
+            if (p && typeof p.usd !== 'undefined') {
+              t.priceUsd = Number(p.usd);
+              t.change24h = typeof p.usd_24h_change === 'number' ? p.usd_24h_change : undefined;
+              const bal = parseFloat(t.balance || '0');
+              const val = (isFinite(bal) && t.priceUsd) ? bal * t.priceUsd : 0;
+              t.valueUsd = isFinite(val) ? val : undefined;
+            }
+          }
+        } catch {}
+      }
+        } catch {}
+      }
+
       setTokens(next);
     } catch {}
   }
@@ -1633,10 +1669,16 @@ export default function Dashboard() {
 
             <Tabs defaultValue="tokens" className="w-full mt-4" onValueChange={(v)=>{ /* store if needed */ }}>
               <div className="flex flex-wrap items-center justify-between gap-2">
+<<<<<<< HEAD
                 <TabsList>
                   <TabsTrigger value="tokens">Tokens</TabsTrigger>
                   <TabsTrigger value="defi">DeFi</TabsTrigger>
                   <TabsTrigger value="nfts">NFTs</TabsTrigger>
+=======
+                <TabsList className="p-3">
+                  <TabsTrigger value="nearTokens">Tokens</TabsTrigger>
+                  <TabsTrigger value="nearNfts">Collectibles</TabsTrigger>
+>>>>>>> 373525e (Capy jam: token cards UI for EVM/NEAR, ERC-20 price + 24h change via CoinGecko, logos from token lists; rename NFTs tab to Collectibles. Follow-up to PR #13.)
                 </TabsList>
                 <div className="flex gap-2">
                   <Button
@@ -1658,17 +1700,19 @@ export default function Dashboard() {
                         </p>
                       )}
                       {nearTokens.map((t) => (
-                        <div
-                          key={t.contractId}
-                          className="flex items-center justify-between gap-2 text-sm"
-                        >
-                          <div className="min-w-0 truncate">
-                            {t.symbol}{" "}
-                            <span className="text-muted-foreground">
-                              · {t.name}
-                            </span>
+                        <div key={t.contractId} className="rounded-lg bg-muted/10 px-4 py-3 flex items-center justify-between gap-3">
+                          <div className="min-w-0 flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-full bg-muted/40 flex items-center justify-center text-xs font-semibold">
+                              {(t.symbol || t.name || "?").slice(0,1).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="truncate text-base font-semibold">{t.name || t.symbol || t.contractId}</div>
+                              <div className="truncate text-xs text-muted-foreground">{t.symbol || t.contractId}</div>
+                            </div>
                           </div>
-                          <div className="shrink-0">{t.balance || "0"}</div>
+                          <div className="shrink-0 text-right">
+                            <div className="text-lg font-semibold">{t.balance || "0"}</div>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -2042,7 +2086,7 @@ export default function Dashboard() {
                         DeFi
                       </TabsTrigger>
                       <TabsTrigger value="nfts" className="text-xl py-3">
-                        NFTs
+                        Collectibles
                       </TabsTrigger>
                     </TabsList>
                     <Button
@@ -2074,15 +2118,19 @@ export default function Dashboard() {
                   <TabsContent value="tokens" className="mt-2">
                     <Card className="w-full text-left">
                       <CardContent className="space-y-4 pt-6">
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between gap-2 text-sm">
-                            <div className="min-w-0 truncate">
-                              ETH{" "}
-                              <span className="text-muted-foreground">
-                                · Ether
-                              </span>
+                        <div className="space-y-2">
+                          <div className="rounded-lg bg-muted/10 px-4 py-3 flex items-center justify-between gap-3">
+                            <div className="min-w-0 flex items-center gap-3">
+                              <div className="h-8 w-8 rounded-full bg-muted/40 flex items-center justify-center text-xs font-semibold">E</div>
+                              <div className="min-w-0">
+                                <div className="truncate text-base font-semibold">ETH</div>
+                                <div className="truncate text-xs text-muted-foreground">Ether</div>
+                              </div>
                             </div>
-                            <div className="shrink-0">{balance || "0"}</div>
+                            <div className="shrink-0 text-right">
+                              <div className="text-lg font-semibold">${(Number(balance || 0) * (usdPrice || 0)).toFixed(2)}</div>
+                              <div className="text-xs text-muted-foreground">{balance || "0"} ETH</div>
+                            </div>
                           </div>
                           <div className="text-[10px] text-muted-foreground">Active: {(getActiveEvmAddress()?.slice(0,6) || '')}…{(getActiveEvmAddress()?.slice(-4) || '')}</div>
                           {tokens.length === 0 && (
@@ -2090,20 +2138,35 @@ export default function Dashboard() {
                               No tokens yet — add from “+ Add”.
                             </p>
                           )}
-                          {tokens.map((t) => (
-                            <div
-                              key={t.address}
-                              className="flex items-center justify-between gap-2 text-sm"
-                            >
-                              <div className="min-w-0 truncate">
-                                {t.symbol}{" "}
-                                <span className="text-muted-foreground">
-                                  · {t.name}
-                                </span>
+                          {tokens.map((t) => {
+                            const hasPrice = typeof t.priceUsd === 'number' && isFinite(t.priceUsd!);
+                            const change = typeof t.change24h === 'number' ? t.change24h! : null;
+                            const changeCls = change === null ? 'text-muted-foreground' : (change > 0 ? 'text-green-500' : (change < 0 ? 'text-red-500' : 'text-muted-foreground'));
+                            const primary = hasPrice ? `$${(t.valueUsd ?? ((parseFloat(t.balance||'0')||0) * (t.priceUsd||0))).toFixed(2)}` : (t.balance || '0');
+                            return (
+                              <div key={t.address} className="rounded-lg bg-muted/10 px-4 py-3 flex items-center justify-between gap-3">
+                                <div className="min-w-0 flex items-center gap-3">
+                                  {t.logoURI ? (
+                                    <img src={t.logoURI} alt={t.symbol} className="h-8 w-8 rounded-full object-cover" />
+                                  ) : (
+                                    <div className="h-8 w-8 rounded-full bg-muted/40 flex items-center justify-center text-xs font-semibold">
+                                      {(t.symbol || t.name || '?').slice(0,1).toUpperCase()}
+                                    </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <div className="truncate text-base font-semibold">{t.name || t.symbol || t.address.slice(0,6)+"…"+t.address.slice(-4)}</div>
+                                    <div className="truncate text-xs text-muted-foreground">{t.symbol || t.address}</div>
+                                  </div>
+                                </div>
+                                <div className="shrink-0 text-right">
+                                  <div className="text-lg font-semibold">{primary}</div>
+                                  {hasPrice && change !== null ? (
+                                    <div className={`text-xs ${changeCls}`}>{(change).toFixed(2)}%</div>
+                                  ) : null}
+                                </div>
                               </div>
-                              <div className="shrink-0">{t.balance || "0"}</div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </CardContent>
                     </Card>
