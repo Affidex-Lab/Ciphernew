@@ -1148,6 +1148,7 @@ export default function Dashboard() {
         if (cid === 1) return 'ethereum';
         if (cid === 42161) return 'arbitrum-one';
         if (cid === 43114) return 'avalanche';
+        if (cid === 8453) return 'base';
         return null;
       })();
 
@@ -1694,13 +1695,13 @@ export default function Dashboard() {
                         </p>
                       )}
                       {nearTokens.map((t) => (
-                        <div key={t.contractId} className="rounded-lg bg-muted/10 px-4 py-3 flex items-center justify-between gap-3">
+                        <div key={t.contractId} className="rounded-lg bg-muted/10 px-4 py-2 flex items-center justify-between gap-3">
                           <div className="min-w-0 flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-full bg-muted/40 flex items-center justify-center text-xs font-semibold">
+                            <div className="h-6 w-6 rounded-full bg-muted/40 flex items-center justify-center text-xs font-semibold">
                               {(t.symbol || t.name || "?").slice(0,1).toUpperCase()}
                             </div>
                             <div className="min-w-0">
-                              <div className="truncate text-base font-semibold">{t.name || t.symbol || t.contractId}</div>
+                              <div className="truncate text-lg font-semibold">{t.name || t.symbol || t.contractId}</div>
                               <div className="truncate text-xs text-muted-foreground">{t.symbol || t.contractId}</div>
                             </div>
                           </div>
@@ -2113,11 +2114,11 @@ export default function Dashboard() {
                     <Card className="w-full text-left">
                       <CardContent className="space-y-4 pt-6">
                         <div className="space-y-2">
-                          <div className="rounded-lg bg-muted/10 px-4 py-3 flex items-center justify-between gap-3">
+                          <div className="rounded-lg bg-muted/10 px-4 py-2 flex items-center justify-between gap-3">
                             <div className="min-w-0 flex items-center gap-3">
-                              <div className="h-8 w-8 rounded-full bg-muted/40 flex items-center justify-center text-xs font-semibold">E</div>
+                              <div className="h-6 w-6 rounded-full bg-muted/40 flex items-center justify-center text-xs font-semibold">E</div>
                               <div className="min-w-0">
-                                <div className="truncate text-base font-semibold">ETH</div>
+                                <div className="truncate text-lg font-semibold">ETH</div>
                                 <div className="truncate text-xs text-muted-foreground">Ether</div>
                               </div>
                             </div>
@@ -2138,17 +2139,17 @@ export default function Dashboard() {
                             const changeCls = change === null ? 'text-muted-foreground' : (change > 0 ? 'text-green-500' : (change < 0 ? 'text-red-500' : 'text-muted-foreground'));
                             const primary = hasPrice ? `$${(t.valueUsd ?? ((parseFloat(t.balance||'0')||0) * (t.priceUsd||0))).toFixed(2)}` : (t.balance || '0');
                             return (
-                              <div key={t.address} className="rounded-lg bg-muted/10 px-4 py-3 flex items-center justify-between gap-3">
+                              <div key={t.address} className="rounded-lg bg-muted/10 px-4 py-2 flex items-center justify-between gap-3">
                                 <div className="min-w-0 flex items-center gap-3">
                                   {t.logoURI ? (
-                                    <img src={t.logoURI} alt={t.symbol} className="h-8 w-8 rounded-full object-cover" />
+                                    <img src={t.logoURI} alt={t.symbol} className="h-6 w-6 rounded-full object-cover" />
                                   ) : (
-                                    <div className="h-8 w-8 rounded-full bg-muted/40 flex items-center justify-center text-xs font-semibold">
+                                    <div className="h-6 w-6 rounded-full bg-muted/40 flex items-center justify-center text-xs font-semibold">
                                       {(t.symbol || t.name || '?').slice(0,1).toUpperCase()}
                                     </div>
                                   )}
                                   <div className="min-w-0">
-                                    <div className="truncate text-base font-semibold">{t.name || t.symbol || t.address.slice(0,6)+"…"+t.address.slice(-4)}</div>
+                                    <div className="truncate text-lg font-semibold">{t.name || t.symbol || t.address.slice(0,6)+"…"+t.address.slice(-4)}</div>
                                     <div className="truncate text-xs text-muted-foreground">{t.symbol || t.address}</div>
                                   </div>
                                 </div>
