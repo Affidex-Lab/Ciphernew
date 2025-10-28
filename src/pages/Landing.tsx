@@ -1,280 +1,249 @@
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Shield, Wallet, Globe, Sun, Moon, Menu, X } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Shield, Wallet, Globe, Chrome as ChromeIcon, Apple, Smartphone } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 14 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.5 } },
+};
+
+const stagger = {
+  hidden: { opacity: 1 },
+  show: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
+};
+
+const item = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.45 } },
+};
 
 export default function Landing() {
   const navigate = useNavigate();
-  const [theme, setTheme] = useState<"light" | "dark">(
-    localStorage.getItem("theme") === "dark" ? "dark" : "light"
-  );
   const [scrolled, setScrolled] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    if (theme === "dark") document.documentElement.classList.add("dark");
-    else document.documentElement.classList.remove("dark");
-    localStorage.setItem("theme", theme);
-  }, [theme]);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
+    const onScroll = () => setScrolled(window.scrollY > 12);
+    onScroll();
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
-
   return (
-    <div className="flex flex-col min-h-screen bg-gradient-to-b from-white to-gray-50 dark:from-[#0b0f17] dark:to-[#121826] text-gray-900 dark:text-gray-100 transition-colors duration-500">
-      {/* === Header === */}
-      <header
-        className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 ${
-          scrolled
-            ? "backdrop-blur-md bg-white/70 dark:bg-[#0b0f17]/70 shadow-sm"
-            : "bg-transparent"
-        }`}
+    <div className="flex min-h-screen flex-col bg-white text-black">
+      <motion.header
+        initial={{ y: -8, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className={`sticky top-0 z-40 w-full border-b border-gray-200 bg-white ${scrolled ? "shadow-sm" : "shadow-none"}`}
       >
-        <div className="max-w-6xl mx-auto flex justify-between items-center px-6 py-4">
-          {/* Logo */}
-          <div
-            className="flex items-center gap-2 cursor-pointer"
-            onClick={() => navigate("/")}
-          >
-            <div className="w-8 h-8 rounded-lg bg-primary"></div>
-            <span className="font-serif font-bold text-xl text-gray-900 dark:text-gray-100">
-              CipherWallet
-            </span>
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+          <div className="flex cursor-pointer items-center gap-2" onClick={() => navigate("/") }>
+            <div className="h-8 w-8 rounded-lg bg-primary" />
+            <span className="text-xl font-bold">CipherWallet</span>
           </div>
-
-          {/* Desktop Nav */}
-          <nav
-            id="navbar"
-            className="hidden md:flex items-center gap-8 text-sm font-medium"
-          >
-            {["Features", "Developers", "Docs", "Contact"].map((link) => (
-              <a
-                key={link}
-                href="#"
-                className="text-gray-700 dark:text-gray-300 hover:text-primary transition-colors"
-              >
-                {link}
+          <nav className="hidden items-center gap-6 md:flex">
+            {[
+              { label: "Features", href: "#features" },
+              { label: "Security", href: "#security" },
+              { label: "Docs", href: "#docs" },
+            ].map((l) => (
+              <a key={l.label} href={l.href} className="group relative text-sm text-gray-700 hover:text-black">
+                {l.label}
+                <span className="absolute inset-x-0 -bottom-1 h-0.5 origin-left scale-x-0 bg-[#8876DD] transition-transform duration-200 group-hover:scale-x-100" />
               </a>
             ))}
           </nav>
-
-          {/* Right Controls */}
           <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={toggleTheme}
-              className="rounded-full border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-            >
-              <motion.div
-                whileTap={{ rotate: 180 }}
-                transition={{ duration: 0.4 }}
-              >
-                {theme === "dark" ? (
-                  <Sun className="w-5 h-5 text-yellow-400" />
-                ) : (
-                  <Moon className="w-5 h-5 text-gray-600" />
-                )}
-              </motion.div>
-            </Button>
-
-            {/* Mobile Menu Button */}
-            <button
-              className="md:hidden p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-              onClick={() => setMenuOpen(!menuOpen)}
-            >
-              {menuOpen ? (
-                <X className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-              ) : (
-                <Menu className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-              )}
-            </button>
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="hidden md:inline-flex">
+              <Button className="bg-primary text-white hover:brightness-110" onClick={() => navigate("/dashboard?autocreate=1")}>Create Wallet</Button>
+            </motion.div>
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <Button variant="outline" className="border-primary text-primary hover:bg-primary hover:text-white" onClick={() => navigate("/access")}>Access Wallet</Button>
+            </motion.div>
           </div>
         </div>
+      </motion.header>
 
-        {/* Mobile Menu Dropdown */}
-        <AnimatePresence>
-          {menuOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-              className="md:hidden bg-white dark:bg-[#0b0f17] shadow-md border-t border-gray-200 dark:border-gray-700"
-            >
-              <div className="flex flex-col items-center space-y-4 py-6">
-                {["Features", "Developers", "Docs", "Contact"].map((link) => (
-                  <a
-                    key={link}
-                    href="#"
-                    onClick={() => setMenuOpen(false)}
-                    className="text-gray-800 dark:text-gray-300 hover:text-primary transition-colors"
-                  >
-                    {link}
-                  </a>
-                ))}
-              </div>
+      <main className="mx-auto w-full max-w-6xl flex-1 px-6">
+        <section className="flex flex-col items-center py-20 text-center">
+          <motion.span
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: [0, -3, 0] }}
+            transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+            className="mb-4 inline-flex items-center rounded-full bg-[#8876DD] px-3 py-1 text-xs font-medium text-white"
+          >
+            New • Seedless smart wallets
+          </motion.span>
+
+          <motion.h1 variants={fadeUp} initial="hidden" animate="show" className="max-w-3xl text-4xl font-serif font-bold md:text-6xl">
+            A simple, secure wallet for everyone
+          </motion.h1>
+          <motion.div initial={{ width: 0, opacity: 0 }} animate={{ width: 120, opacity: 1 }} transition={{ delay: 0.25, duration: 0.5 }} className="mt-3 h-1 rounded-full bg-gradient-to-r from-[#8876DD] to-[#00EC97]" />
+
+          <motion.p variants={fadeUp} initial="hidden" animate="show" transition={{ delay: 0.1 }} className="mt-5 max-w-2xl text-lg text-gray-700">
+            Create seedless smart wallets in seconds. Own your assets with professional-grade security and effortless recovery.
+          </motion.p>
+
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2, duration: 0.4 }} className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <motion.div whileHover={{ y: -2, scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <Button className="px-8 py-3 text-lg bg-primary text-white hover:brightness-110" onClick={() => navigate("/dashboard?autocreate=1")}>Get Started</Button>
             </motion.div>
-          )}
-        </AnimatePresence>
-      </header>
+            <motion.div whileHover={{ y: -2, scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <Button variant="outline" className="px-8 py-3 text-lg border-primary text-primary hover:bg-primary hover:text-white" onClick={() => navigate("/access")}>Access Wallet</Button>
+            </motion.div>
+          </motion.div>
+        </section>
 
-      <div className="h-20" />
-
-      {/* === Hero Section === */}
-      <section className="relative flex flex-col items-center justify-center text-center py-36 px-6 overflow-hidden">
-        <motion.div
-          className="absolute inset-0 -z-10 blur-3xl opacity-60 dark:opacity-40"
-          animate={{
-            background: [
-              "radial-gradient(circle at 20% 30%, #00FFA3 0%, transparent 70%)",
-              "radial-gradient(circle at 80% 20%, #4FC3F7 0%, transparent 70%)",
-              "radial-gradient(circle at 50% 80%, #00E5FF 0%, transparent 70%)",
-              "radial-gradient(circle at 20% 30%, #00FFA3 0%, transparent 70%)",
-            ],
-          }}
-          transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-        />
-
-        <motion.h1
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7 }}
-          className="text-5xl md:text-6xl font-serif font-bold max-w-3xl text-gray-900 dark:text-gray-100"
-        >
-          The Future of Secure Digital Assets
-        </motion.h1>
-
-        <motion.p
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.7 }}
-          className="text-gray-700 dark:text-gray-400 mt-6 max-w-2xl text-lg"
-        >
-          CipherWallet is your decentralized key to managing digital identity,
-          assets, and transactions securely across the blockchain.
-        </motion.p>
-
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.6 }}
-          className="mt-10 flex flex-wrap gap-4 justify-center"
-        >
-          <Button
-            className="px-8 py-3 text-lg shadow-md bg-primary text-white hover:bg-primary/90"
-            onClick={() => navigate("/dashboard?autocreate=1")}
-          >
-            Create Wallet
-          </Button>
-          <Button
-            variant="outline"
-            className="px-8 py-3 text-lg border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
-            onClick={() => navigate("/access")}
-          >
-            Access Wallet
-          </Button>
-        </motion.div>
-      </section>
-
-      {/* === Features Section === */}
-      <section className="py-24 px-6 bg-gray-50 dark:bg-[#0f1522] transition-colors duration-500">
-        <div className="max-w-6xl mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold font-serif mb-12 text-gray-900 dark:text-gray-100">
-            Why Choose CipherWallet?
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <motion.section id="features" variants={stagger} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }} className="py-14">
+          <motion.h2 variants={item} className="mb-10 text-center font-serif text-3xl font-bold md:text-4xl">Why choose CipherWallet?</motion.h2>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             {[
-              {
-                icon: <Shield className="w-10 h-10 text-primary" />,
-                title: "Secure Encryption",
-                desc: "Your private keys and transactions are end-to-end encrypted, ensuring maximum safety.",
-              },
-              {
-                icon: <Wallet className="w-10 h-10 text-primary" />,
-                title: "Seedless Wallets",
-                desc: "No more phrases. Create automatic disposable wallets with secure recovery methods.",
-              },
-              {
-                icon: <Globe className="w-10 h-10 text-primary" />,
-                title: "Cross-Chain Ready",
-                desc: "Supports multiple blockchains for a truly decentralized experience.",
-              },
+              { icon: <Shield className="h-10 w-10 text-primary" />, title: "Professional security", desc: "Best-practice encryption and smart account design keep your assets protected." },
+              { icon: <Wallet className="h-10 w-10 text-primary" />, title: "Seedless by default", desc: "No recovery phrases. Create wallets instantly with simple, reliable recovery options." },
+              { icon: <Globe className="h-10 w-10 text-primary" />, title: "Built for multiple chains", desc: "Ready for the networks you use today and tomorrow." },
             ].map((f, i) => (
-              <Card
-                key={i}
-                className="bg-white dark:bg-[#121826] hover:shadow-xl transition-shadow rounded-2xl border border-gray-200 dark:border-gray-700"
-              >
-                <CardContent className="p-8 flex flex-col items-center text-center space-y-4">
-                  {f.icon}
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                    {f.title}
-                  </h3>
-                  <p className="text-gray-700 dark:text-gray-400 text-sm">
-                    {f.desc}
-                  </p>
-                </CardContent>
-              </Card>
+              <motion.div key={i} variants={item} whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 200, damping: 20 }}>
+                <Card className="rounded-2xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+                  <CardContent className="flex flex-col items-start gap-3 p-6">
+                    {f.icon}
+                    <h3 className="text-lg font-semibold">{f.title}</h3>
+                    <p className="text-sm text-gray-700">{f.desc}</p>
+                  </CardContent>
+                </Card>
+              </motion.div>
             ))}
           </div>
-        </div>
-      </section>
+        </motion.section>
 
-      {/* === Footer === */}
-      <footer className="bg-gray-200 dark:bg-black text-gray-700 dark:text-gray-300 py-16 px-6 mt-auto transition-colors duration-500">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-12">
-          <div className="space-x-3">
-            <h4 className="font-semibold text-gray-900 dark:text-white mb-4">
-              About CipherWallet
-            </h4>
-            <li className="text-sm leading-relaxed hover:text-primary transition-colors">
-              <a href="#navbar">Docs</a>
-            </li>
-            <li className="text-sm leading-relaxed hover:text-primary transition-colors">
-              <a href="#navbar">Contact</a>
-            </li>
-            <li className="text-sm leading-relaxed hover:text-primary transition-colors">
-              <a href="#navbar">Blog</a>
-            </li>
+        <motion.section id="security" initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }} className="py-14">
+          <div className="grid items-center gap-10 md:grid-cols-2">
+            <motion.div variants={item}>
+              <h3 className="mb-3 font-serif text-3xl font-bold">Security you can trust</h3>
+              <p className="text-gray-700">From day one, CipherWallet is designed for clarity and control. Transparent permissions, straightforward recovery, and modern account abstraction give you a professional foundation for self-custody.</p>
+            </motion.div>
+            <motion.div variants={item} className="rounded-2xl border border-gray-200 bg-white p-8 text-left shadow-sm">
+              <div className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-500">Highlights</div>
+              <ul className="space-y-2 text-sm text-gray-800">
+                <li>Seedless onboarding</li>
+                <li>Granular permissions</li>
+                <li>Recovery kits and passkeys</li>
+                <li>Smart account architecture</li>
+              </ul>
+            </motion.div>
           </div>
+        </motion.section>
 
+        {/* Extensions (Coming soon) */}
+        <motion.section id="extension" initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }} className="py-14">
+          <div className="grid items-center gap-10 md:grid-cols-2">
+            <motion.div variants={item}>
+              <span className="mb-3 inline-flex items-center rounded-full bg-[#8876DD] px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-white">Upcoming</span>
+              <h3 className="mb-3 font-serif text-3xl font-bold">Chrome extension</h3>
+              <p className="text-gray-700">Access your wallet directly from the browser with streamlined approvals and on-site actions. Built for speed and clarity.</p>
+
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button className="group flex items-center gap-2 bg-primary text-white hover:brightness-110" onClick={e=>e.preventDefault()}>
+                      <ChromeIcon className="h-4 w-4" />
+                      <span className="transition-opacity group-hover:opacity-0">Add to Chrome</span>
+                      <span className="absolute opacity-0 transition-opacity group-hover:opacity-100">Coming soon</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Coming soon</TooltipContent>
+                </Tooltip>
+              </div>
+            </motion.div>
+
+            <motion.div variants={item} className="rounded-2xl border border-gray-200 bg-white p-8 text-left shadow-sm">
+              <div className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-500">What to expect</div>
+              <ul className="space-y-2 text-sm text-gray-800">
+                <li>One-click approvals</li>
+                <li>Site connection overview</li>
+                <li>Quick actions and notifications</li>
+              </ul>
+            </motion.div>
+          </div>
+        </motion.section>
+
+        {/* Mobile Apps (Coming soon) */}
+        <motion.section id="apps" initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }} className="py-14">
+          <div className="grid items-center gap-10 md:grid-cols-2">
+            <motion.div variants={item}>
+              <span className="mb-3 inline-flex items-center rounded-full bg-[#8876DD] px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-white">Upcoming</span>
+              <h3 className="mb-3 font-serif text-3xl font-bold">Android & iOS apps</h3>
+              <p className="text-gray-700">A native experience for everyday use. Manage balances, receive notifications, and recover securely.</p>
+
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button className="group flex items-center gap-2 border-primary text-primary hover:bg-primary hover:text-white" variant="outline" onClick={e=>e.preventDefault()}>
+                      <Apple className="h-4 w-4" />
+                      <span className="transition-opacity group-hover:opacity-0">App Store</span>
+                      <span className="absolute opacity-0 transition-opacity group-hover:opacity-100">Coming soon</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Coming soon</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button className="group flex items-center gap-2 border-primary text-primary hover:bg-primary hover:text-white" variant="outline" onClick={e=>e.preventDefault()}>
+                      <Smartphone className="h-4 w-4" />
+                      <span className="transition-opacity group-hover:opacity-0">Google Play</span>
+                      <span className="absolute opacity-0 transition-opacity group-hover:opacity-100">Coming soon</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Coming soon</TooltipContent>
+                </Tooltip>
+              </div>
+            </motion.div>
+
+            <motion.div variants={item} className="rounded-2xl border border-gray-200 bg-white p-8 text-left shadow-sm">
+              <div className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-500">Highlights</div>
+              <ul className="space-y-2 text-sm text-gray-800">
+                <li>Native notifications</li>
+                <li>Biometric authentication</li>
+                <li>Offline backup support</li>
+              </ul>
+            </motion.div>
+          </div>
+        </motion.section>
+      </main>
+
+      <footer className="mt-auto border-t border-gray-200 bg-white py-12">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-10 px-6 md:grid-cols-3">
           <div>
-            <h4 className="font-semibold text-gray-900 dark:text-white mb-4">
-              Tech Stack
-            </h4>
-            <ul className="space-y-2 text-sm">
-              <li>React + TailwindCSS</li>
-              <li>Framer Motion</li>
-              <li>Node.js / Express</li>
-              <li>NEAR Blockchain</li>
+            <div className="mb-3 flex items-center gap-2">
+              <div className="h-6 w-6 rounded-md bg-primary" />
+              <div className="font-semibold">CipherWallet</div>
+            </div>
+            <p className="text-sm text-gray-600">Simple, secure self-custody for everyone.</p>
+          </div>
+          <div>
+            <div className="mb-3 font-semibold">Product</div>
+            <ul className="space-y-2 text-sm text-gray-700">
+              <li><a href="#features" className="hover:text-black">Features</a></li>
+              <li><a href="#security" className="hover:text-black">Security</a></li>
+              <li><a href="#docs" className="hover:text-black">Docs</a></li>
             </ul>
           </div>
-
           <div>
-            <h4 className="font-semibold text-gray-900 dark:text-white mb-4">
-              Social
-            </h4>
-            <ul className="space-y-2 text-sm">
-              {["Twitter", "GitHub", "Discord", "LinkedIn"].map((s) => (
-                <li key={s}>
-                  <a href="" className="hover:text-primary transition-colors">
-                    {s}
-                  </a>
-                </li>
-              ))}
-            </ul>
+            <div className="mb-3 font-semibold">Get started</div>
+            <div className="flex gap-3">
+              <motion.div whileHover={{ y: -2, scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Button className="bg-primary text-white hover:brightness-110" onClick={() => navigate("/dashboard?autocreate=1")}>Create</Button>
+              </motion.div>
+              <motion.div whileHover={{ y: -2, scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Button variant="outline" className="border-primary text-primary hover:bg-primary hover:text-white" onClick={() => navigate("/access")}>Access</Button>
+              </motion.div>
+            </div>
           </div>
         </div>
-        <div className="mt-12 text-center text-xs text-gray-500 dark:text-gray-500">
-          © {new Date().getFullYear()} CipherWallet. All wrongs reserved.
-        </div>
+        <div className="mt-10 text-center text-xs text-gray-500">© {new Date().getFullYear()} CipherWallet</div>
       </footer>
     </div>
   );

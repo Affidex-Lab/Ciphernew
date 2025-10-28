@@ -1,5 +1,5 @@
 import express from 'express';
-import cors from 'cors';
+import cors, { CorsOptions } from 'cors';
 import helmet from 'helmet';
 import pino from 'pino';
 import adminRoutes from './routes/admin';
@@ -16,8 +16,8 @@ const allowedOrigins = (process.env.ADMIN_ALLOWED_ORIGINS || 'http://localhost:5
   .map((s) => s.trim())
   .filter(Boolean);
 
-app.use(cors({
-  origin: (origin, cb) => {
+const corsOptions: CorsOptions = {
+  origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
     if (!origin) return cb(null, true);
     if (allowedOrigins.includes(origin)) return cb(null, true);
     return cb(null, false);
@@ -25,7 +25,8 @@ app.use(cors({
   credentials: true,
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization']
-}));
+};
+app.use(cors(corsOptions));
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json());

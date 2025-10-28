@@ -12,7 +12,7 @@ import { getStats, ensureAdminToken, listWallets, disableWallet, sweepWallet, pr
 
 export default function AdminDashboard() {
   const [tokenReady, setTokenReady] = useState(false);
-  const [status, setStatus] = useState<string>('');
+  const [status, setStatus] = useState<string | undefined>(undefined);
   const [q, setQ] = useState<string>('');
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(20);
@@ -130,10 +130,10 @@ export default function AdminDashboard() {
           <div className="flex flex-wrap items-end gap-2 mb-3">
             <div className="space-y-1">
               <Label>Status</Label>
-              <Select value={status} onValueChange={v => setStatus(v)}>
+              <Select value={status ?? 'any'} onValueChange={v => setStatus(v === 'any' ? undefined : v)}>
                 <SelectTrigger className="w-[160px]"><SelectValue placeholder="Any" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any</SelectItem>
+                  <SelectItem value="any">Any</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="disabled">Disabled</SelectItem>
                   <SelectItem value="swept">Swept</SelectItem>

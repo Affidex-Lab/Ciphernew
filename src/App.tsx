@@ -33,9 +33,12 @@ import { Core } from "@walletconnect/core";
 import { getSdkError } from "@walletconnect/utils";
 
 // NEAR imports
-import { ensureNearKey } from "./near/keyring";
+import { ensureNearKey, } from "./near/keyring";
 import { fetchNearBalance, formatYoctoToNear, getNearPublicKey, sendNear, explorerTxUrl, emitAnalytics } from "./near/helpers";
 import { getNearConfig, persistNearConfig } from "./near/client";
+import { openWalletSelector, disconnectNear as selectorDisconnect, getActiveNearAccountId, getWallet as getNearWallet, ensureSelector as ensureNearSelector } from "./near/selector";
+import { KeyPair } from "near-api-js";
+import { fetchErc20Prices } from "./lib/utils";
 
 export default function Dashboard() {
   //Nav Variable
@@ -79,16 +82,21 @@ export default function Dashboard() {
   const [balance, setBalance] = useState<string>("");
   const [chainId, setChainId] = useState<bigint | null>(null);
   const [usdPrice, setUsdPrice] = useState<number>(0);
+  const [nearUsdPrice, setNearUsdPrice] = useState<number>(0);
 
   const ethRefreshInFlight = useRef(false);
   const tokenRefreshInFlight = useRef(false);
   const priceRefreshInFlight = useRef(false);
 
-  type Token = { address: string; symbol: string; name: string; decimals: number; balance: string };
+  const [debugEvm, setDebugEvm] = useState<boolean>(()=>{ try{ const p=new URLSearchParams(window.location.search); return p.get('debug')==='1' || localStorage.getItem('debug:evm')==='1'; }catch{return false;}});
+  const [debugLastEth, setDebugLastEth] = useState<string>("");
+  const [debugRpc, setDebugRpc] = useState<string>("");
+
+  type Token = { address: string; symbol: string; name: string; decimals: number; balance: string; priceUsd?: number; change24h?: number; valueUsd?: number; logoURI?: string };
   const [tokens, setTokens] = useState<Token[]>([]);
   const [newTokenAddr, setNewTokenAddr] = useState<string>("");
 
-  type KnownToken = { address: string; symbol: string; name: string; decimals: number };
+  type KnownToken = { address: string; symbol: string; name: string; decimals: number; logoURI?: string };
   const KNOWN_TOKENS: Record<string, KnownToken[]> = {
     "42161": [
       { address: "0x82af49447d8a07e3bd95bd0d56f35241523fbab1", symbol: "WETH", name: "Wrapped Ether", decimals: 18 },
@@ -128,8 +136,7 @@ export default function Dashboard() {
   const [restoreCode, setRestoreCode] = useState<string>("");
   const [restoreFile, setRestoreFile] = useState<string>("");
 
-  const rpc = useMemo(() => rpcUrl || bundlerUrl || "", [rpcUrl, bundlerUrl]);
-  
+
   type EvmNet = {
     key: string;
     name: string;
@@ -161,7 +168,10 @@ export default function Dashboard() {
     ];
     return base.map(n => ({ ...n, ...(evmNetOverrides[n.key] || {}) }));
   }, [bundlerUrl, entryPoint, accFactory, factory, policyId, evmNetOverrides]);
-  const [activeNetworkKey, setActiveNetworkKey] = useState<string>("arbitrum-sepolia");
+  const [activeNetworkKey, setActiveNetworkKey] = useState<string>(() => localStorage.getItem("activeNetworkKey") || "ethereum-sepolia");
+  const selectedNet = useMemo(() => NETWORKS.find(n => n.key === activeNetworkKey), [NETWORKS, activeNetworkKey]);
+  const rpc = useMemo(() => selectedNet?.rpcUrl || rpcUrl || "", [selectedNet, rpcUrl]);
+  useEffect(()=>{ try{ setDebugRpc(rpc||''); }catch{} }, [rpc]);
 
   const [accounts, setAccounts] = useState<Array<{ label: string; ownerPk: string; ownerAddr: string; accSalt: string; accountAddr: string | null }>>([]);
   const [activeAccountIdx, setActiveAccountIdx] = useState<number>(0);
@@ -378,6 +388,19 @@ export default function Dashboard() {
     } catch {}
   }
 
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("evm:migration:v1") !== "1") {
+        const keys = ["bundlerUrl","rpcUrl","entryPoint","factory","accFactory","policyId"]; // keep wcProjectId
+        for (const k of keys) localStorage.removeItem(k);
+        const nk = localStorage.getItem("activeNetworkKey") || "ethereum-sepolia";
+        localStorage.setItem("activeNetworkKey", nk);
+        localStorage.setItem("evm:migration:v1", "1");
+        try { selectNetwork(nk); } catch {}
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => { loadHistory(); }, []);
   useEffect(() => { (async()=>{ try{ await updatePendingHistory(); }catch{} })(); }, [bundlerUrl]);
 
@@ -418,14 +441,33 @@ export default function Dashboard() {
         setWcProjectId(ls("wcProjectId") || serverCfg.wcProjectId || envWc || "");
 
         try {
-          const overridesArr = Array.isArray(serverCfg.evmNetworkDefaults) ? serverCfg.evmNetworkDefaults : [];
+          const envEvmDefaultsStr = (import.meta as any).env?.VITE_EVM_NETWORK_DEFAULTS || "";
+          let envEvmDefaults: any[] = [];
+          try {
+            if (envEvmDefaultsStr) {
+              envEvmDefaults = JSON.parse(envEvmDefaultsStr);
+            }
+          } catch {}
+
+          const overridesArr = [
+            ...(Array.isArray(serverCfg.evmNetworkDefaults) ? serverCfg.evmNetworkDefaults : []),
+            ...(Array.isArray(envEvmDefaults) ? envEvmDefaults : [])
+          ];
           const ov: Record<string, Partial<EvmNet>> = {};
           for (const o of overridesArr) {
             if (o && typeof o.key === "string") {
               const { key, ...rest } = o as any;
-              ov[key] = rest;
+              ov[key] = { ...(ov[key] || {}), ...rest };
             }
           }
+          try {
+            const loc = JSON.parse(localStorage.getItem("evm:overrides") || "{}");
+            if (loc && typeof loc === 'object') {
+              for (const k of Object.keys(loc)) {
+                ov[k] = { ...(ov[k] || {}), ...(loc[k] || {}) };
+              }
+            }
+          } catch {}
           setEvmNetOverrides(ov);
         } catch {}
       } catch {}
@@ -435,12 +477,58 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       try {
-        if (!rpc) return;
+        if (!rpc || !selectedNet) return;
         const cid = await getChainId(rpc);
-        setChainId(cid);
+        if (cid !== BigInt(selectedNet.chainId)) {
+          if (selectedNet.key === 'ethereum-sepolia') {
+            const candidates = [
+              'https://rpc.sepolia.org',
+              'https://ethereum-sepolia-rpc.publicnode.com',
+              'https://ethereum-sepolia.blockpi.network/v1/rpc/public'
+            ];
+            for (const u of candidates) {
+              try {
+                const c2 = await getChainId(u);
+                if (c2 === BigInt(11155111)) {
+                  setRpcUrl(u);
+                  const ov = { ...(evmNetOverrides||{}) };
+                  ov['ethereum-sepolia'] = { ...(ov['ethereum-sepolia']||{}), rpcUrl: u };
+                  setEvmNetOverrides(ov);
+                  localStorage.setItem('evm:overrides', JSON.stringify(ov));
+                  setChainId(c2);
+                  return;
+                }
+              } catch {}
+            }
+          }
+        } else {
+          setChainId(cid);
+        }
       } catch {}
     })();
-  }, [rpc]);
+  }, [rpc, selectedNet]);
+
+  useEffect(() => {
+    const assetId = (NETWORKS.find((n) => n.key === activeNetworkKey)?.assetId) || "ethereum";
+    let timer: any;
+    let mounted = true;
+    const fetchPrice = async () => {
+      if (priceRefreshInFlight.current) return;
+      priceRefreshInFlight.current = true;
+      try {
+        const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${assetId}&vs_currencies=usd`);
+        if (res.ok) {
+          const j = await res.json();
+          const p = Number(j[assetId]?.usd) || 0;
+          if (mounted) setUsdPrice(p);
+        }
+      } catch {}
+      finally { priceRefreshInFlight.current = false; }
+    };
+    fetchPrice();
+    timer = setInterval(fetchPrice, 60000);
+    return () => { mounted = false; clearInterval(timer); };
+  }, [activeNetworkKey, NETWORKS]);
 
   useEffect(() => {
     const assetId = (NETWORKS.find((n) => n.key === activeNetworkKey)?.assetId) || "ethereum";
@@ -475,6 +563,8 @@ export default function Dashboard() {
           if (seed.length) {
             localStorage.setItem(key, JSON.stringify(seed));
             await refreshTokens();
+          } else {
+            try { await discoverTokens(); } catch {}
           }
         }
       } catch {}
@@ -504,7 +594,7 @@ export default function Dashboard() {
               const addr = (t.address || "").toLowerCase();
               if (!addr) continue;
               if (!arr.some(x=>x.address.toLowerCase()===addr)){
-                arr.push({ address: t.address, symbol: t.symbol||"", name: t.name||"", decimals: Number(t.decimals||18) });
+                arr.push({ address: t.address, symbol: t.symbol||"", name: t.name||"", decimals: Number(t.decimals||18), logoURI: (t.logoURI || t.logoUri || undefined) });
               }
             }
           }
@@ -539,13 +629,46 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       try {
-        if (!rpc || !accountAddr) { setBalance(""); return; }
-        const provider = new ethers.JsonRpcProvider(rpc);
-        const bal = await provider.getBalance(accountAddr);
+        if (!rpc) { setBalance(""); return; }
+        const active = getActiveEvmAddress();
+        if (!active) { setBalance(""); return; }
+        const provider = getJsonRpcProvider();
+        if (!provider) { setBalance(""); return; }
+        const bal = await provider.getBalance(active);
         setBalance(ethers.formatEther(bal));
-      } catch {}
+        try{ setDebugLastEth('ok @ '+new Date().toLocaleTimeString()); }catch{}
+      } catch (e:any) { try{ setDebugLastEth('error: '+(e?.message||'')); }catch{} }
     })();
-  }, [rpc, accountAddr]);
+  }, [rpc, accountAddr, chainId, ownerAddr]);
+
+  useEffect(() => {
+    (async () => {
+      try{
+        if (!rpc || !entryPoint) return;
+        if (!ownerAddr || !accSalt) return;
+        const useFactory = await resolveFactoryAddr().catch(()=>null as any);
+        if (!useFactory) return;
+        const predicted = await predictAccountAddress(rpc, useFactory, entryPoint, ownerAddr, accSalt);
+        setAccountAddr(predicted);
+        localStorage.setItem("accountAddr", predicted);
+        if (chainId) localStorage.setItem(`accountAddr:${String(chainId)}`, predicted);
+      }catch{}
+    })();
+  }, [rpc, entryPoint, accFactory, factory, ownerAddr, accSalt, chainId]);
+
+  useEffect(() => {
+    try{
+      if (!chainId) return;
+      const saved = localStorage.getItem(`accountAddr:${String(chainId)}`);
+      if (saved) setAccountAddr(saved);
+    }catch{}
+  }, [chainId]);
+
+  useEffect(() => {
+    try{
+      if (chainId && accountAddr) localStorage.setItem(`accountAddr:${String(chainId)}`, accountAddr);
+    }catch{}
+  }, [chainId, accountAddr]);
 
   useEffect(() => {
     (async () => {
@@ -557,21 +680,25 @@ export default function Dashboard() {
   }, [rpc, accountAddr, chainId]);
 
   useEffect(() => {
-    if (!rpc || !accountAddr) return;
+    if (!rpc) return;
     let mounted = true;
     const tick = async () => {
       if (ethRefreshInFlight.current) return;
       ethRefreshInFlight.current = true;
       try {
-        const provider = new ethers.JsonRpcProvider(rpc);
-        const bal = await provider.getBalance(accountAddr);
+        const active = getActiveEvmAddress();
+        if (!active) return;
+        const provider = getJsonRpcProvider();
+        if (!provider) return;
+        const bal = await provider.getBalance(active);
         if (mounted) setBalance(ethers.formatEther(bal));
-      } catch {}
+        try{ setDebugLastEth('ok @ '+new Date().toLocaleTimeString()); }catch{}
+      } catch (e:any) { try{ setDebugLastEth('error: '+(e?.message||'')); }catch{} }
       finally { ethRefreshInFlight.current = false; }
     };
     const id = setInterval(tick, 20000);
     return () => { mounted = false; clearInterval(id); };
-  }, [rpc, accountAddr]);
+  }, [rpc, accountAddr, chainId, ownerAddr]);
 
   useEffect(() => {
     if (!rpc || !accountAddr || !chainId) return;
@@ -618,17 +745,30 @@ export default function Dashboard() {
   }, [accountAddr, configReady]);
 
   function saveConfig() {
-    localStorage.setItem("bundlerUrl", bundlerUrl);
-    localStorage.setItem("entryPoint", entryPoint);
-    localStorage.setItem("accFactory", accFactory);
-    localStorage.setItem("factory", factory);
-    localStorage.setItem("rpcUrl", rpcUrl);
-    localStorage.setItem("policyId", policyId);
-    localStorage.setItem("wcProjectId", wcProjectId);
+    try {
+      localStorage.setItem("wcProjectId", wcProjectId);
+      const key = activeNetworkKey;
+      const ov: Record<string, Partial<EvmNet>> = { ...(evmNetOverrides || {}) };
+      const cur = ov[key] || {};
+      ov[key] = {
+        ...cur,
+        bundlerUrl: bundlerUrl || cur.bundlerUrl || "",
+        rpcUrl: rpcUrl || cur.rpcUrl || "",
+        entryPoint: entryPoint || cur.entryPoint || "",
+        accountFactory: accFactory || cur.accountFactory || "",
+        disposableFactory: factory || cur.disposableFactory || "",
+        policyId: policyId || cur.policyId || "",
+      };
+      localStorage.setItem("evm:overrides", JSON.stringify(ov));
+      setEvmNetOverrides(ov);
+    } catch {
+      // ignore
+    }
   }
 
   function selectNetwork(key: string){
     setActiveNetworkKey(key);
+    try { localStorage.setItem("activeNetworkKey", key); } catch {}
     const n = NETWORKS.find(x=>x.key===key)!;
     setRpcUrl(n.rpcUrl || "");
     setBundlerUrl(n.bundlerUrl || "");
@@ -638,6 +778,20 @@ export default function Dashboard() {
     setPolicyId(n.policyId || "");
     saveConfig();
   }
+
+  useEffect(() => {
+    try {
+      const n = NETWORKS.find(x=>x.key===activeNetworkKey);
+      if (n) {
+        setRpcUrl(n.rpcUrl || "");
+        setBundlerUrl(n.bundlerUrl || "");
+        setEntryPoint(n.entryPoint || "");
+        setAccFactory(n.accountFactory || "");
+        setFactory(n.disposableFactory || "");
+        setPolicyId(n.policyId || "");
+      }
+    } catch {}
+  }, [activeNetworkKey, NETWORKS]);
 
   function createNewAccount(){
     const w = ethers.Wallet.createRandom();
@@ -933,12 +1087,51 @@ export default function Dashboard() {
     }
   }
 
+  function getActiveEvmAddress(): string | null {
+    try {
+      const cid = chainId ? String(chainId) : '';
+      const saved = cid ? (localStorage.getItem(`accountAddr:${cid}`) || '') : '';
+      return accountAddr || (saved || null) || ownerAddr || null;
+    } catch { return accountAddr || ownerAddr || null; }
+  }
+
+  function getJsonRpcProvider(): ethers.JsonRpcProvider | null {
+    try {
+      if (!rpc) return null;
+      if (chainId === 11155111n) {
+        const candidates = [
+          rpc,
+          'https://rpc.sepolia.org',
+          'https://ethereum-sepolia-rpc.publicnode.com',
+          'https://ethereum-sepolia.blockpi.network/v1/rpc/public'
+        ];
+        for (const u of candidates) {
+          if (u && typeof u === 'string') {
+            try { return new ethers.JsonRpcProvider(u); } catch {}
+          }
+        }
+        return new ethers.JsonRpcProvider(rpc);
+      }
+      return new ethers.JsonRpcProvider(rpc);
+    } catch { return null; }
+  }
+
+
   async function refreshTokens() {
     try {
-      if (!rpc || !accountAddr) return;
-      const provider = new ethers.JsonRpcProvider(rpc);
+      if (!rpc) return;
+      const active = getActiveEvmAddress();
+      if (!active) return;
+      const provider = getJsonRpcProvider();
+      if (!provider) return;
       const key = `tokens:${String(chainId||"")}`;
       const stored = JSON.parse(localStorage.getItem(key) || "[]") as string[];
+
+      const cidStr = String(chainId || "");
+      const known = ((tokenIndex as any)[cidStr] || (KNOWN_TOKENS as any)[cidStr] || []) as Array<any>;
+      const logoMap: Record<string, string> = {};
+      for (const kt of known) { try { if (kt?.address && kt?.logoURI) logoMap[String(kt.address).toLowerCase()] = kt.logoURI; } catch {} }
+
       const next: Token[] = [];
       for (const addr of stored) {
         const a = addr as string;
@@ -953,10 +1146,38 @@ export default function Dashboard() {
           try { name = await erc20.name(); } catch {}
           try { symbol = await erc20.symbol(); } catch {}
           try { decimals = Number(await erc20.decimals()); } catch {}
-          try { raw = await erc20.balanceOf(accountAddr); } catch {}
-          next.push({ address: a, name: name||"Token", symbol: symbol||"ERC20", decimals, balance: ethers.formatUnits(raw, decimals) });
+          try { raw = await erc20.balanceOf(active); } catch {}
+          const balance = ethers.formatUnits(raw, decimals);
+          next.push({ address: a, name: name||"Token", symbol: symbol||"ERC20", decimals, balance, logoURI: logoMap[a.toLowerCase()] });
         } catch {}
       }
+
+      const platform = (() => {
+        const cid = Number(chainId || 0);
+        if (cid === 1) return 'ethereum';
+        if (cid === 42161) return 'arbitrum-one';
+        if (cid === 43114) return 'avalanche';
+        if (cid === 8453) return 'base';
+        return null;
+      })();
+
+      if (platform && next.length) {
+        try {
+          const addrs = next.map(t => t.address);
+          const prices = await fetchErc20Prices(platform, addrs);
+          for (const t of next) {
+            const p = prices[t.address.toLowerCase()];
+            if (p && typeof p.usd !== 'undefined') {
+              t.priceUsd = Number(p.usd);
+              t.change24h = typeof p.usd_24h_change === 'number' ? p.usd_24h_change : undefined;
+              const bal = parseFloat(t.balance || '0');
+              const val = (isFinite(bal) && t.priceUsd) ? bal * t.priceUsd : 0;
+              t.valueUsd = isFinite(val) ? val : undefined;
+            }
+          }
+        } catch {}
+      }
+
       setTokens(next);
     } catch {}
   }
@@ -1000,8 +1221,8 @@ export default function Dashboard() {
       const latest = await provider.getBlockNumber();
       const fromBlock = latest - 120000 > 0 ? latest - 120000 : 0;
       const topic = ethers.id("Transfer(address,address,uint256)");
-      const toLogs = await provider.getLogs({ fromBlock, toBlock: latest, topics: [topic, null, ethers.hexZeroPad(accountAddr, 32)] });
-      const fromLogs = await provider.getLogs({ fromBlock, toBlock: latest, topics: [topic, ethers.hexZeroPad(accountAddr, 32), null] });
+      const toLogs = await provider.getLogs({ fromBlock, toBlock: latest, topics: [topic, null, ethers.zeroPadValue(accountAddr, 32)] });
+      const fromLogs = await provider.getLogs({ fromBlock, toBlock: latest, topics: [topic, ethers.zeroPadValue(accountAddr, 32), null] });
       const addresses = Array.from(new Set([...toLogs, ...fromLogs].map(l => l.address)));
       const key = `tokens:${String(chainId||"")}`;
       const list = JSON.parse(localStorage.getItem(key) || "[]") as string[];
@@ -1021,6 +1242,9 @@ export default function Dashboard() {
   const [openNearSend, setOpenNearSend] = useState(false);
   const [openNearReceive, setOpenNearReceive] = useState(false);
   const [nearReceiver, setNearReceiver] = useState("");
+  const [openNearDisposable, setOpenNearDisposable] = useState(false);
+  const [nearDisposable, setNearDisposable] = useState<{ publicKey: string; secretKey: string } | null>(null);
+  const [nearKeyAttached, setNearKeyAttached] = useState<boolean>(false);
   const [nearAmount, setNearAmount] = useState("");
   const [nearUsdPrice, setNearUsdPrice] = useState<number>(0);
   const [nearNetKey, setNearNetKey] = useState<"mainnet"|"testnet">("mainnet");
@@ -1158,9 +1382,21 @@ export default function Dashboard() {
     }catch(e:any){ try { (toast as any)?.error?.('Could not add NFT collection', { description: e?.message || String(e) }); } catch {} }
   }
 
-  async function handleConnectNear(){}
+  async function handleConnectNear(){
+    try{
+      await openWalletSelector();
+      const acc = await getActiveNearAccountId();
+      if (acc){
+        setNearAccountId(acc);
+        const bal = await fetchNearBalance(acc).catch(()=>"0");
+        setNearBalance(formatYoctoToNear(bal));
+      }
+    }catch(e:any){ try { (toast as any)?.error?.('NEAR connect failed', { description: e?.message || String(e) }); } catch {} }
+  }
 
-  async function handleDisconnectNear(){}
+  async function handleDisconnectNear(){
+    try{ await selectorDisconnect(); setNearAccountId(null); setNearBalance(""); }catch{}
+  }
 
   async function sendNearFlow(){
     try{
@@ -1441,14 +1677,22 @@ export default function Dashboard() {
                   <div className="flex items-end justify-between">
                     <div className="space-y-1">
                       <div className="text-xs text-muted-foreground">Total</div>
+<<<<<<< HEAD
+                      <div className="text-4xl font-semibold tracking-tight">US ${(parseFloat(nearBalance || '0') * nearUsdPrice || 0).toFixed(2)}</div>
+                      <div className="text-xs text-muted-foreground">{nearBalance || '0.00'} Ⓝ</div>
+=======
                       <div className="text-4xl font-semibold tracking-tight">US ${(Number(nearBalance || 0) * (nearUsdPrice || 0)).toFixed(2)}</div>
                       <div className="text-xs text-muted-foreground">{nearBalance || '0.00'} Ⓝ · {nearAccountId}</div>
+>>>>>>> origin/main
                     </div>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <Button onClick={()=> setOpenNearSend(true)}>Send NEAR</Button>
-                    <Button variant="outline" onClick={()=>{ navigator.clipboard.writeText(nearAccountId); try { (toast as any)?.success?.('Account copied'); } catch {} }}>Copy Account</Button>
-                    <Button variant="outline" onClick={handleDisconnectNear}>Disconnect</Button>
+                    <Button onClick={()=> setOpenNearSend(true)}>Send</Button>
+                    <Button variant="outline" onClick={()=> setOpenNearReceive(true)}>Receive</Button>
+                    <Button variant="outline" onClick={()=>{ const kp = KeyPair.fromRandom('ed25519'); setNearDisposable({ publicKey: kp.getPublicKey().toString(), secretKey: kp.secretKey }); setOpenNearDisposable(true); try { (toast as any)?.success?.('Session key created'); } catch {} }}>Session Key</Button>
+                    <Button variant="outline" onClick={() => { try { (toast as any)?.info?.('Funding coming soon'); } catch {} }}>Fund wallet</Button>
+                    <Button variant="outline" onClick={() => { try { (toast as any)?.info?.('Swap coming soon'); } catch {} }}>Swap</Button>
+                    <Button variant="outline" onClick={async()=>{ try{ await openWalletSelector(); const acc = await getActiveNearAccountId(); if (acc){ setNearAccountId(acc); const bal = await fetchNearBalance(acc).catch(()=>"0"); setNearBalance(formatYoctoToNear(bal)); } }catch(e:any){ try { (toast as any)?.error?.('NEAR connect failed', { description: e?.message || String(e) }); } catch {} } }}>Connect dApp</Button>
                   </div>
                 </div>
 
@@ -1463,11 +1707,12 @@ export default function Dashboard() {
             )}
 
 
-            <Tabs defaultValue="nearTokens" className="w-full mt-4">
+            <Tabs defaultValue="tokens" className="w-full mt-4" onValueChange={(v)=>{ /* store if needed */ }}>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <TabsList>
-                  <TabsTrigger value="nearTokens">Tokens</TabsTrigger>
-                  <TabsTrigger value="nearNfts">NFTs</TabsTrigger>
+                <TabsList className="p-3">
+                  <TabsTrigger value="tokens">Tokens</TabsTrigger>
+                  <TabsTrigger value="defi">DeFi</TabsTrigger>
+                  <TabsTrigger value="nfts">Collectibles</TabsTrigger>
                 </TabsList>
                 <div className="flex gap-2">
                   <Button
@@ -1475,18 +1720,11 @@ export default function Dashboard() {
                     size="sm"
                     onClick={() => setOpenNearAddToken(true)}
                   >
-                    + Add FT
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setOpenNearAddNft(true)}
-                  >
-                    + Add NFT
+                    + Add
                   </Button>
                 </div>
               </div>
-              <TabsContent value="nearTokens" className="mt-2">
+              <TabsContent value="tokens" className="mt-2">
                 <Card className="w-full text-left">
                   <CardContent className="space-y-4 pt-6">
                     <div className="space-y-1">
@@ -1496,24 +1734,33 @@ export default function Dashboard() {
                         </p>
                       )}
                       {nearTokens.map((t) => (
-                        <div
-                          key={t.contractId}
-                          className="flex items-center justify-between gap-2 text-sm"
-                        >
-                          <div className="min-w-0 truncate">
-                            {t.symbol}{" "}
-                            <span className="text-muted-foreground">
-                              · {t.name}
-                            </span>
+                        <div key={t.contractId} className="rounded-lg bg-muted/10 px-4 py-2 flex items-center justify-between gap-3">
+                          <div className="min-w-0 flex items-center gap-3">
+                            <div className="h-6 w-6 rounded-full bg-muted/40 flex items-center justify-center text-xs font-semibold">
+                              {(t.symbol || t.name || "?").slice(0,1).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="truncate text-lg font-semibold">{t.name || t.symbol || t.contractId}</div>
+                              <div className="truncate text-xs text-muted-foreground">{t.symbol || t.contractId}</div>
+                            </div>
                           </div>
-                          <div className="shrink-0">{t.balance || "0"}</div>
+                          <div className="shrink-0 text-right">
+                            <div className="text-lg font-semibold">{t.balance || "0"}</div>
+                          </div>
                         </div>
                       ))}
                     </div>
                   </CardContent>
                 </Card>
               </TabsContent>
-              <TabsContent value="nearNfts" className="mt-2">
+              <TabsContent value="defi" className="mt-2">
+                <Card className="w-full text-left">
+                  <CardContent className="space-y-4 pt-6">
+                    <p className="text-sm text-muted-foreground">DeFi features are coming soon to NEAR.</p>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              <TabsContent value="nfts" className="mt-2">
                 <Card className="w-full text-left">
                   <CardContent className="space-y-4 pt-6">
                     {nearNftCollections.length === 0 && (
@@ -1688,6 +1935,67 @@ export default function Dashboard() {
                 </div>
               </DialogContent>
             </Dialog>
+
+            <Dialog open={openNearDisposable} onOpenChange={setOpenNearDisposable}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>NEAR Session Key</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  {nearDisposable ? (
+                    <>
+                      <div className="space-y-1 text-sm">
+                        <div className="text-muted-foreground">Public Key</div>
+                        <div className="truncate font-mono text-xs">{nearDisposable.publicKey}</div>
+                      </div>
+                      <div className="space-y-1 text-sm">
+                        <div className="text-muted-foreground">Secret Key</div>
+                        <div className="truncate font-mono text-xs">{nearDisposable.secretKey}</div>
+                      </div>
+                      <div className="flex justify-end gap-2 pt-2">
+                        <Button variant="outline" onClick={async()=>{
+                          try{
+                            if (nearDisposable){
+                              const wallet = await getNearWallet();
+                              try{ await wallet.signAndSendTransaction({ signerId: nearAccountId!, receiverId: nearAccountId!, actions: [ { type: 'DeleteKey', params: { publicKey: nearDisposable.publicKey } } ] }); setNearKeyAttached(false); }catch{}
+                            }
+                          }catch{}
+                          setNearDisposable(null);
+                          setOpenNearDisposable(false);
+                          try { (toast as any)?.info?.('Session ended'); } catch {}
+                        }}>End session</Button>
+                        <Button onClick={async()=>{
+                          try{
+                            if (!nearDisposable || !nearAccountId){ try { (toast as any)?.info?.('Connect wallet first'); } catch {} ; return; }
+                            const receiverId = prompt('Receiver (contract/account) for permission', nearAccountId) || nearAccountId;
+                            const allowanceNear = prompt('Allowance (NEAR) for function calls', '0.25') || '0.25';
+                            const methods = prompt('Allowed method names (comma separated, blank = any)', '') || '';
+                            const allowance = (()=>{ try{ return BigInt(Math.floor(parseFloat(allowanceNear)*1e24).toString()); }catch{ return BigInt(0); } })();
+                            const methodNames = methods.split(',').map(s=>s.trim()).filter(Boolean);
+                            const wallet = await getNearWallet();
+                            await wallet.signAndSendTransaction({ signerId: nearAccountId, receiverId, actions: [ { type: 'AddKey', params: { publicKey: nearDisposable.publicKey, accessKey: { permission: { type: 'FunctionCall', receiverId, methodNames, allowance } } } } ] });
+                            setNearKeyAttached(true);
+                            try { (toast as any)?.success?.('Session key attached'); } catch {}
+                          }catch(e:any){ try { (toast as any)?.error?.('Could not attach key', { description: e?.message || String(e) }); } catch {} }
+                        }}>{nearKeyAttached ? 'Re-attach' : 'Attach to account'}</Button>
+                        <Button variant="outline" onClick={async()=>{
+                          try{
+                            if (!nearDisposable || !nearAccountId){ return; }
+                            const wallet = await getNearWallet();
+                            await wallet.signAndSendTransaction({ signerId: nearAccountId, receiverId: nearAccountId, actions: [ { type: 'DeleteKey', params: { publicKey: nearDisposable.publicKey } } ] });
+                            setNearKeyAttached(false);
+                            try { (toast as any)?.success?.('Access key removed'); } catch {}
+                          }catch(e:any){ try { (toast as any)?.error?.('Remove key failed', { description: e?.message || String(e) }); } catch {} }
+                        }}>Remove key</Button>
+                      </div>
+                      <div className="text-xs text-muted-foreground">This key is kept only in memory. Attaching it adds an on-chain access key; you can remove it anytime.</div>
+                    </>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">No active session.</div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
           </>
         )}
 
@@ -1767,6 +2075,12 @@ export default function Dashboard() {
                     >
                       Receive
                     </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => { if (accountAddr) { navigator.clipboard.writeText(accountAddr); try { (toast as any)?.success?.('Account copied'); } catch {} } }}
+                    >
+                      Copy Account
+                    </Button>
                     <Button variant="outline" onClick={createDisposableKey}>
                       Disposable Key
                     </Button>
@@ -1790,7 +2104,11 @@ export default function Dashboard() {
                     >
                       Swap
                     </Button>
+<<<<<<< HEAD
+                    <Button variant="outline" onClick={() => { try { if (!disposable) ensureDisposableKey(); setOpenWc(true); } catch {} }}>
+=======
                     <Button variant="outline" onClick={async () => { try { await ensureWc(); if (!disposable) ensureDisposableKey(); setOpenWc(true); } catch {} }}>
+>>>>>>> origin/main
                       Connect dApp
                     </Button>
                   </div>
@@ -1806,7 +2124,7 @@ export default function Dashboard() {
                         DeFi
                       </TabsTrigger>
                       <TabsTrigger value="nfts" className="text-xl py-3">
-                        NFTs
+                        Collectibles
                       </TabsTrigger>
                     </TabsList>
                     <Button
@@ -1820,39 +2138,73 @@ export default function Dashboard() {
                     >
                       + Add
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => { try { await discoverTokens(); } catch {} }}
+                    >
+                      Discover
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => { try { const active = getActiveEvmAddress(); const provider = getJsonRpcProvider(); if (active && provider) { const bal = await provider.getBalance(active); setBalance(ethers.formatEther(bal)); } await refreshTokens(); } catch {} }}
+                    >
+                      Refresh
+                    </Button>
                   </div>
                   <TabsContent value="tokens" className="mt-2">
                     <Card className="w-full text-left">
                       <CardContent className="space-y-4 pt-6">
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between gap-2 text-sm">
-                            <div className="min-w-0 truncate">
-                              ETH{" "}
-                              <span className="text-muted-foreground">
-                                · Ether
-                              </span>
+                        <div className="space-y-2">
+                          <div className="rounded-lg bg-muted/10 px-4 py-2 flex items-center justify-between gap-3">
+                            <div className="min-w-0 flex items-center gap-3">
+                              <div className="h-6 w-6 rounded-full bg-muted/40 flex items-center justify-center text-xs font-semibold">E</div>
+                              <div className="min-w-0">
+                                <div className="truncate text-lg font-semibold">ETH</div>
+                                <div className="truncate text-xs text-muted-foreground">Ether</div>
+                              </div>
                             </div>
-                            <div className="shrink-0">{balance || "0"}</div>
+                            <div className="shrink-0 text-right">
+                              <div className="text-lg font-semibold">${(Number(balance || 0) * (usdPrice || 0)).toFixed(2)}</div>
+                              <div className="text-xs text-muted-foreground">{balance || "0"} ETH</div>
+                            </div>
                           </div>
+                          <div className="text-[10px] text-muted-foreground">Active: {(getActiveEvmAddress()?.slice(0,6) || '')}…{(getActiveEvmAddress()?.slice(-4) || '')}</div>
                           {tokens.length === 0 && (
                             <p className="text-xs text-muted-foreground">
                               No tokens yet — add from “+ Add”.
                             </p>
                           )}
-                          {tokens.map((t) => (
-                            <div
-                              key={t.address}
-                              className="flex items-center justify-between gap-2 text-sm"
-                            >
-                              <div className="min-w-0 truncate">
-                                {t.symbol}{" "}
-                                <span className="text-muted-foreground">
-                                  · {t.name}
-                                </span>
+                          {tokens.map((t) => {
+                            const hasPrice = typeof t.priceUsd === 'number' && isFinite(t.priceUsd!);
+                            const change = typeof t.change24h === 'number' ? t.change24h! : null;
+                            const changeCls = change === null ? 'text-muted-foreground' : (change > 0 ? 'text-green-500' : (change < 0 ? 'text-red-500' : 'text-muted-foreground'));
+                            const primary = hasPrice ? `$${(t.valueUsd ?? ((parseFloat(t.balance||'0')||0) * (t.priceUsd||0))).toFixed(2)}` : (t.balance || '0');
+                            return (
+                              <div key={t.address} className="rounded-lg bg-muted/10 px-4 py-2 flex items-center justify-between gap-3">
+                                <div className="min-w-0 flex items-center gap-3">
+                                  {t.logoURI ? (
+                                    <img src={t.logoURI} alt={t.symbol} className="h-6 w-6 rounded-full object-cover" />
+                                  ) : (
+                                    <div className="h-6 w-6 rounded-full bg-muted/40 flex items-center justify-center text-xs font-semibold">
+                                      {(t.symbol || t.name || '?').slice(0,1).toUpperCase()}
+                                    </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <div className="truncate text-lg font-semibold">{t.name || t.symbol || t.address.slice(0,6)+"…"+t.address.slice(-4)}</div>
+                                    <div className="truncate text-xs text-muted-foreground">{t.symbol || t.address}</div>
+                                  </div>
+                                </div>
+                                <div className="shrink-0 text-right">
+                                  <div className="text-lg font-semibold">{primary}</div>
+                                  {hasPrice && change !== null ? (
+                                    <div className={`text-xs ${changeCls}`}>{(change).toFixed(2)}%</div>
+                                  ) : null}
+                                </div>
                               </div>
-                              <div className="shrink-0">{t.balance || "0"}</div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </CardContent>
                     </Card>
@@ -2093,17 +2445,17 @@ export default function Dashboard() {
                 <img
                   alt="QR"
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${
-                    accountAddr || ""
+                    getActiveEvmAddress() || ""
                   }`}
                   className="rounded bg-white p-2"
                 />
               </div>
               <div className="flex items-center gap-2">
-                <Input readOnly value={accountAddr || ""} />
+                <Input readOnly value={getActiveEvmAddress() || ""} />
                 <Button
                   variant="outline"
                   onClick={() => {
-                    if (accountAddr) navigator.clipboard.writeText(accountAddr);
+                    { const addr = getActiveEvmAddress(); if (addr) navigator.clipboard.writeText(addr); }
                   }}
                 >
                   Copy
@@ -2130,18 +2482,7 @@ export default function Dashboard() {
               <div className="mt-2 space-y-3">
                 <div className="space-y-3">
                   <Label>Network</Label>
-                  <Select value={addNetKey} onValueChange={setAddNetKey}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select network" />
-                    </SelectTrigger>
-                    <SelectContent className="z-100 bg-white dark:bg-gray-900 backdrop-blur-none bg-opacity-100 border border-gray-200 dark:border-gray-700 shadow-xl">
-                      {NETWORKS.map((n) => (
-                        <SelectItem key={n.key} value={n.key}>
-                          {n.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input readOnly value={NETWORKS.find((n) => n.key === activeNetworkKey)?.name || 'Network'} />
                 </div>
 
                 {addMode === "search" ? (
@@ -2157,7 +2498,7 @@ export default function Dashboard() {
                     <div className="max-h-60 overflow-auto rounded border">
                       {(() => {
                         const cid = String(
-                          NETWORKS.find((n) => n.key === addNetKey)?.chainId ||
+                          NETWORKS.find((n) => n.key === activeNetworkKey)?.chainId ||
                             ""
                         );
                         const list = (tokenIndex[cid] ||
@@ -2184,9 +2525,7 @@ export default function Dashboard() {
                               <Button
                                 size="sm"
                                 onClick={() => {
-                                  const targetCid = NETWORKS.find(
-                                    (n) => n.key === addNetKey
-                                  )?.chainId;
+                                  const targetCid = chainId ? Number(chainId) : NETWORKS.find((n) => n.key === activeNetworkKey)?.chainId;
                                   addTokenAddressToList(t.address, targetCid);
                                   if (String(targetCid) === String(chainId)) {
                                     refreshTokens();
@@ -2198,7 +2537,7 @@ export default function Dashboard() {
                                       (toast as any)?.success?.(
                                         "Token added to " +
                                           (NETWORKS.find(
-                                            (n) => n.key === addNetKey
+                                            (n) => n.key === activeNetworkKey
                                           )?.name || "network"),
                                         {
                                           description:
@@ -2217,7 +2556,7 @@ export default function Dashboard() {
                       })()}
                       {(() => {
                         const cid = String(
-                          NETWORKS.find((n) => n.key === addNetKey)?.chainId ||
+                          NETWORKS.find((n) => n.key === activeNetworkKey)?.chainId ||
                             ""
                         );
                         const list = (tokenIndex[cid] ||
@@ -2331,6 +2670,12 @@ export default function Dashboard() {
                   <p className="text-sm text-muted-foreground">
                     Connect a dApp by opening it in the in‑app browser or pasting a WalletConnect URI.
                   </p>
+<<<<<<< HEAD
+                  {!wcProjectId && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">WalletConnect Project ID is not set in Settings. You can still open the dApp Browser and copy a URI, but pairing will require setting the Project ID.</p>
+                  )}
+=======
+>>>>>>> origin/main
                   <div className="flex flex-wrap gap-2">
                     <Button onClick={() => { try { window.open('/browser', 'dappBrowser', 'width=1100,height=800'); } catch {} }}>
                       Open dApp Browser
@@ -2445,6 +2790,15 @@ export default function Dashboard() {
             </Button>
           </div>
         </nav>
+        {debugEvm && stack==='evm' && (
+          <div className="fixed bottom-16 right-2 z-50 rounded bg-black/70 text-white p-2 text-xs space-y-1">
+            <div>chainId: {String(chainId||'-')}</div>
+            <div>active: {getActiveEvmAddress() || '-'}</div>
+            <div>rpc: {debugRpc || '-'}</div>
+            <div>eth: {balance || '0'}</div>
+            <div>last: {debugLastEth || '-'}</div>
+          </div>
+        )}
         <Toaster richColors position="top-center" />
       </main>
     </div>

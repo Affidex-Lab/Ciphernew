@@ -3,7 +3,7 @@ services:
     name: cipherwallet-api
     env: node
     region: oregon
-    rootDirectory: server
+    rootDir: server
     plan: starter
     buildCommand: npm ci && npm run build && npm run migrate
     startCommand: npm start
@@ -11,21 +11,18 @@ services:
     autoDeploy: true
     envVars:
       - key: NODE_VERSION
-        value: 20
+        value: "20"
       - key: ADMIN_API_TOKEN
         sync: false
       - key: RPC_URL
         value: https://arb1.arbitrum.io/rpc
       - key: ADMIN_EVM_PRIVATE_KEY
         sync: false
-      - key: DATABASE_URL
-        fromDatabase: cipherwalletmvp
-        property: connectionString
       - key: ADMIN_ALLOWED_ORIGINS
         value: "http://localhost:5173"
       - key: ADMIN_RATE_LIMIT
         value: "120"
       - key: WEBHOOK_RATE_LIMIT
         value: "60"
-# If the Postgres name "cipherwalletmvp" is not found during deployment,
-# remove the DATABASE_URL mapping above and set it manually in the Render service Environment.
+# Note: Set DATABASE_URL manually in the Render service Environment after creation,
+# or add a databases: section and map fromDatabase if you want Blueprint to create/manage Postgres.
