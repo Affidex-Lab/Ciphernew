@@ -1246,7 +1246,6 @@ export default function Dashboard() {
   const [nearDisposable, setNearDisposable] = useState<{ publicKey: string; secretKey: string } | null>(null);
   const [nearKeyAttached, setNearKeyAttached] = useState<boolean>(false);
   const [nearAmount, setNearAmount] = useState("");
-  const [nearUsdPrice, setNearUsdPrice] = useState<number>(0);
   const [nearNetKey, setNearNetKey] = useState<"mainnet"|"testnet">("mainnet");
 
   type NearToken = { contractId: string; symbol: string; name: string; decimals: number; balance: string };

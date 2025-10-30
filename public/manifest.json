@@ -1,0 +1,47 @@
+{
+  "name": "CipherWallet - Seedless Smart Wallet",
+  "short_name": "CipherWallet",
+  "description": "Create seedless smart wallets in seconds. Own your assets with professional-grade security and effortless recovery.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#8876DD",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/seedless.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "utilities"],
+  "lang": "en",
+  "dir": "ltr",
+  "scope": "/",
+  "prefer_related_applications": false,
+  "shortcuts": [
+    {
+      "name": "Create Wallet",
+      "short_name": "Create",
+      "description": "Create a new wallet",
+      "url": "/dashboard?autocreate=1",
+      "icons": [{ "src": "/seedless.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Access Wallet",
+      "short_name": "Access",
+      "description": "Access existing wallet",
+      "url": "/access",
+      "icons": [{ "src": "/seedless.svg", "sizes": "any" }]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot1.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "label": "CipherWallet Dashboard"
+    }
+  ]
+}

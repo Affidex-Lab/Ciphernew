@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CipherWallet</string>
+    <string name="title_activity_main">CipherWallet</string>
+    <string name="package_name">com.cipherwallet.app</string>
+    <string name="custom_url_scheme">com.cipherwallet.app</string>
+</resources>

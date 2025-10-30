@@ -108,3 +108,89 @@
     @apply border border-primary text-primary hover:bg-primary hover:text-white;
   }
 }
+
+/* ---------- Mobile Responsive Styles ---------- */
+@media (max-width: 768px) {
+  /* Adjust padding and spacing for mobile */
+  .container {
+    @apply px-4;
+  }
+  
+  /* Make cards stack properly on mobile */
+  .grid {
+    @apply gap-4;
+  }
+  
+  /* Mobile-optimized button sizes */
+  button {
+    @apply min-h-[48px];
+  }
+  
+  /* Ensure touch targets are large enough */
+  input, select, textarea {
+    @apply min-h-[48px] text-base;
+  }
+  
+  /* Optimize card layouts for mobile */
+  .card {
+    @apply rounded-lg p-4;
+  }
+  
+  /* Mobile navigation adjustments */
+  header {
+    @apply sticky top-0 z-50;
+  }
+  
+  /* Prevent horizontal scroll */
+  body {
+    overflow-x: hidden;
+  }
+  
+  /* Adjust font sizes for mobile readability */
+  h1 {
+    @apply text-2xl;
+  }
+  
+  h2 {
+    @apply text-xl;
+  }
+  
+  h3 {
+    @apply text-lg;
+  }
+  
+  /* Bottom navigation safe area for mobile */
+  .bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ---------- Android-specific optimizations ---------- */
+.capacitor-android {
+  /* Ensure proper viewport on Android */
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  
+  /* Optimize touch feedback */
+  -webkit-tap-highlight-color: transparent;
+  
+  /* Prevent text selection on UI elements */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Swipeable sections animation */
+.swipe-section {
+  touch-action: pan-y pinch-zoom;
+}
+
+/* Loading spinner for Android */
+@keyframes android-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.android-spinner {
+  animation: android-spin 1s linear infinite;
+}

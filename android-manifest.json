@@ -1,0 +1,48 @@
+{
+  "name": "CipherWallet",
+  "short_name": "Cipher",
+  "description": "Seedless Smart Wallet for NEAR and EVM chains",
+  "version": "1.0.0",
+  "version_code": 1,
+  "package_name": "com.cipherwallet.app",
+  "author": "CipherWallet Team",
+  "start_url": "https://cipherwalletmvp.netlify.app",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#8876DD",
+  "theme_color": "#8876DD",
+  "icons": [
+    {
+      "src": "/seedless.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "android/app/src/main/res/drawable/splash.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "features": [
+    "Web3 Wallet",
+    "Seedless Authentication",
+    "Multi-chain Support",
+    "Smart Account Architecture",
+    "Secure Key Management"
+  ],
+  "permissions": [
+    "INTERNET",
+    "ACCESS_NETWORK_STATE"
+  ],
+  "android": {
+    "min_sdk_version": 21,
+    "target_sdk_version": 33,
+    "hardware_accelerated": true,
+    "use_cleartext_traffic": false
+  }
+}
