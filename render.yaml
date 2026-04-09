@@ -2,9 +2,8 @@ services:
   # 1. The React Frontend (Vite)
   - type: static
     name: cipher-frontend
-    env: static
-    # We use --legacy-peer-deps in case the 'messy' structure has version conflicts
-    buildCommand: npm install --legacy-peer-deps && npm run build
+    # No 'env' line here—Static sites don't need it in the YAML spec
+    buildCommand: npm install && npm run build
     publishPath: ./dist
     routes:
       - type: rewrite
@@ -15,9 +14,7 @@ services:
   - type: web
     name: cipher-backend
     env: node
-    # We install ts-node so Render can run the .ts file directly without a pre-build step
     buildCommand: npm install && npm install ts-node typescript @types/node
-    # Using ts-node to execute the wrapper we created
     startCommand: npx ts-node src/backend/server.js
     envVars:
       - key: NODE_VERSION
